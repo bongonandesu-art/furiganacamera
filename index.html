@@ -21,7 +21,7 @@
         .status-retry { background: #ff9900; color: #fff; }
         #camera-input { display: none; }
         
-        /* 最初だけ表示されるID設定ボタン（画面左上に小さく配置） */
+        /* 認証IDの確認・変更用ボタン（間違えたときなどのために残してあります） */
         .setting-key-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
     </style>
 </head>
@@ -33,30 +33,29 @@
     <div class="view-area">
         <img id="preview-img" alt="撮影画像">
         <div id="ocr-overlay"></div>
-        <div class="guide" id="guideText">下のボタンを押して住所を撮影してください</div>
+        <div class="guide" id="guideText">下のボタンを押して文章を撮影してください</div>
     </div>
     <div class="control-panel">
-        <button class="btn-main status-shoot" id="actionBtn" onclick="handleAction()">撮影する</button>
+        <button class="btn-main status-shoot" id="actionBtn" onclick="handleAction()">カメラを起動</button>
     </div>
 </div>
 
 <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="onPhotoTaken(event)">
 
 <script>
-    // 初回起動時、またはボタンを押したときにIDを入力させてブラウザに保存する関数
     function setupApiKey() {
         const savedKey = localStorage.getItem('YAHOO_CLIENT_ID') || '';
         const newKey = prompt('Yahoo!のClient ID（アプリケーションID）を入力してください:', savedKey);
         if (newKey !== null) {
             localStorage.setItem('YAHOO_CLIENT_ID', newKey.trim());
-            alert('IDを保存しました。次からは入力不要です。');
+            alert('IDを保存しました。');
         }
     }
 
     function getApiKey() {
         const key = localStorage.getItem('YAHOO_CLIENT_ID');
         if (!key) {
-            alert('最初に左上の「🔑 認証ID設定」ボタンからYahoo!のIDを設定してください。');
+            alert('最初に左上の「🔑 認証ID設定」ボタンからIDを設定してください。');
             return null;
         }
         return key;
@@ -70,14 +69,14 @@
     let isShowingResult = false;
 
     function handleAction() {
-        if (!getApiKey()) return; // IDがなければ進ませない
+        if (!getApiKey()) return;
         if (!isShowingResult) {
             cameraInput.click();
         } else {
             isShowingResult = false;
-            actionBtn.innerText = "撮影する";
+            actionBtn.innerText = "カメラを起動";
             actionBtn.className = "btn-main status-shoot";
-            guideText.innerText = "下のボタンを押して文字を撮影してください";
+            guideText.innerText = "下のボタンを押して文章を撮影してください";
             if (previewImg.src.startsWith('blob:')) { URL.revokeObjectURL(previewImg.src); }
             previewImg.src = "";
             previewImg.style.display = 'none';
@@ -87,18 +86,27 @@
     }
 
     function onPhotoTaken(event) {
-        const file = event.target.files;
-        if (!file) return;
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+        const file = files[0];
+
+        // 確実に対象画像を表示するための処理順変更
         const blobUrl = URL.createObjectURL(file);
         previewImg.src = blobUrl;
         previewImg.style.display = 'block';
         overlay.style.display = 'block';
+        
         isShowingResult = true;
         actionBtn.innerText = "次の撮影へ";
         actionBtn.className = "btn-main status-retry";
         guideText.innerText = "文字を解析中...";
+        
         cameraInput.value = "";
-        previewImg.onload = () => { analyzeImage(file); };
+        
+        // 画像の読み込み完了イベントを待ってからOCRを走らせる
+        previewImg.onload = () => { 
+            analyzeImage(file); 
+        };
     }
 
     async function analyzeImage(file) {
@@ -106,7 +114,8 @@
             const worker = await Tesseract.createWorker('jpn');
             const ret = await worker.recognize(file);
             await worker.terminate();
-            guideText.innerText = "💡 読めない漢字をタップするとルビが出ます";
+            
+            guideText.innerText = "💡 読めない文字をタップするとルビが出ます";
             const words = ret.data.words;
             const rect = previewImg.getBoundingClientRect();
             const scaleX = rect.width / previewImg.naturalWidth;
@@ -178,7 +187,6 @@
         }
     }
 
-    // 初回アクセス時に自動で入力ダイアログを開く
     window.onload = () => {
         if (!localStorage.getItem('YAHOO_CLIENT_ID')) {
             setupApiKey();

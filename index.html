@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>コールセンター住所ルビカメラ</title>
+    <title>ふりがなカメラ</title>
     <script src="https://jsdelivr.net"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -106,7 +106,7 @@
             const worker = await Tesseract.createWorker('jpn');
             const ret = await worker.recognize(file);
             await worker.terminate();
-            guideText.innerText = "💡 読めない住所をタップするとルビが出ます";
+            guideText.innerText = "💡 読めない漢字をタップするとルビが出ます";
             const words = ret.data.words;
             const rect = previewImg.getBoundingClientRect();
             const scaleX = rect.width / previewImg.naturalWidth;

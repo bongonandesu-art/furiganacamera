@@ -96,7 +96,7 @@
             if (typeof Tesseract === 'undefined') {
                 await new Promise((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = "https://jsdelivr.net";
+                    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
                     script.onload = resolve;
                     script.onerror = reject;
                     document.head.appendChild(script);
@@ -122,8 +122,8 @@
             actionBtn.disabled = false;
             actionBtn.style.opacity = "1";
             actionBtn.innerText = "再試行する";
-            guideText.innerText = "読み込みエラーが発生しました。電波の良い場所で再試行してください。";
-            console.error(err);
+            guideText.innerText = "読み込みエラーが発生しました。通信環境を確認して再試行してください。";
+            console.error("OCRエンジンの読み込みに失敗しました:", err);
         }
     }
 

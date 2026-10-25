@@ -18,8 +18,17 @@
         .btn-main { border: none; padding: 14px 45px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer; min-width: 160px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: background 0.2s; }
         .status-shoot { background: #00cc66; color: #fff; }
         .status-retry { background: #ff9900; color: #fff; }
+        .status-load { background: #0076ff; color: #fff; }
         #camera-input { display: none; }
         .setting-key-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
+
+        /* 動きのある軽いアニメーション演出 */
+        @keyframes pulse {
+            0% { opacity: 0.3; transform: scale(0.98); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0.3; transform: scale(0.98); }
+        }
+        .loading-animation { display: none; color: #0076ff; font-size: 18px; font-weight: bold; animation: pulse 1.5s infinite ease-in-out; text-align: center; }
     </style>
 </head>
 <body>
@@ -30,10 +39,13 @@
     <div class="view-area">
         <img id="preview-img" alt="撮影画像">
         <div id="ocr-overlay"></div>
+        <!-- 動きのあるローディング表示エリア -->
+        <div id="loadingIndicator" class="loading-animation">⚡ 解析プログラムを読み込み中...</div>
         <div class="guide" id="guideText">撮影した文章内の漢字にふりがなを付けます</div>
     </div>
     <div class="control-panel">
-        <button class="btn-main status-shoot" id="actionBtn" onclick="handleAction()">カメラを起動</button>
+        <!-- 最初はプログラム読み込みボタンのみ表示 -->
+        <button class="btn-main status-load" id="actionBtn" onclick="initOcrEngine()">解析プログラム読み込み</button>
     </div>
 </div>
 
@@ -64,10 +76,59 @@
     const actionBtn = document.getElementById('actionBtn');
     const guideText = document.getElementById('guideText');
     const resizeCanvas = document.getElementById('resize-canvas');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    
     let isShowingResult = false;
+    let globalWorker = null; // 読み込んだプログラムをページを閉じるまで保持する変数
 
-    function handleAction() {
+    // 【手順2・3】解析プログラムを1度だけ読み込む関数
+    async function initOcrEngine() {
         if (!getApiKey()) return;
+        
+        actionBtn.disabled = true;
+        actionBtn.style.opacity = "0.5";
+        actionBtn.innerText = "通信中...";
+        loadingIndicator.style.display = "block";
+        guideText.innerText = "重要なプログラムを立ち上げています。しばらくお待ちください。";
+
+        try {
+            // スクリプトの動的ロード
+            if (typeof Tesseract === 'undefined') {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = "https://jsdelivr.net";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            // プログラム（Worker）を初期化して変数に永続保持
+            globalWorker = await Tesseract.createWorker('jpn');
+            
+            // 読み込み完了時のUI変更
+            loadingIndicator.style.display = "none";
+            guideText.innerText = "読み込み完了。カメラを起動してください。";
+            
+            actionBtn.disabled = false;
+            actionBtn.style.opacity = "1";
+            actionBtn.innerText = "カメラを起動";
+            actionBtn.className = "btn-main status-shoot";
+            // ボタンのonclickイベントをカメラ起動用に書き換える
+            actionBtn.setAttribute("onclick", "handleAction()");
+
+        } catch (err) {
+            loadingIndicator.style.display = "none";
+            actionBtn.disabled = false;
+            actionBtn.style.opacity = "1";
+            actionBtn.innerText = "再試行する";
+            guideText.innerText = "読み込みエラーが発生しました。電波の良い場所で再試行してください。";
+            console.error(err);
+        }
+    }
+
+    // カメラ起動と再撮影のコントロール（プログラムは絶対に捨てない）
+    function handleAction() {
         if (!isShowingResult) {
             cameraInput.click();
         } else {
@@ -86,7 +147,7 @@
     function onPhotoTaken(event) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
-        const file = files[0];
+        const file = files;
 
         guideText.innerText = "画像を最適化中...";
 
@@ -94,7 +155,6 @@
         reader.onload = function(e) {
             const img = new Image();
             img.onload = function() {
-                // 解析の安定性と速度を両立する絶妙なサイズ（800px）にリサイズ
                 const max_size = 800;
                 let width = img.width;
                 let height = img.height;
@@ -119,10 +179,14 @@
                     isShowingResult = true;
                     actionBtn.innerText = "次の撮影へ";
                     actionBtn.className = "btn-main status-retry";
-                    guideText.innerText = "文字を解析中...";
+                    
+                    // アニメーションを「解析中」に変えて再起動
+                    loadingIndicator.innerText = "🔍 文字を解析中（初回プログラムを利用中）...";
+                    loadingIndicator.style.display = "block";
+                    guideText.innerText = "少々お待ちください...";
 
-                    // スマホ内だけで安全・確実にOCR処理を行う
-                    analyzeImageLocally(blobUrl, width, height);
+                    // すでに起動済みの globalWorker を使い回す
+                    analyzeImageWithGlobalWorker(blobUrl, width, height);
                 }, 'image/jpeg', 0.7);
             };
             img.src = e.target.result;
@@ -131,24 +195,13 @@
         cameraInput.value = "";
     }
 
-    // 撮影した直後、必要な時だけ裏で一瞬ライブラリをロードして解析する（高速・100%安定）
-    async function analyzeImageLocally(blobUrl, naturalWidth, naturalHeight) {
+    // すでに読み込み済みのコアプログラムを使い回して高速解析
+    async function analyzeImageWithGlobalWorker(blobUrl, naturalWidth, naturalHeight) {
         try {
-            // スクリプトが未読込の場合のみ、動的にインポートしてページ初期ロードを爆速化
-            if (typeof Tesseract === 'undefined') {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = "https://jsdelivr.net";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-
-            const worker = await Tesseract.createWorker('jpn');
-            const ret = await worker.recognize(blobUrl);
-            await worker.terminate();
+            // 保持しておいたglobalWorkerで直接認識（再ダウンロードは一切発生しません）
+            const ret = await globalWorker.recognize(blobUrl);
             
+            loadingIndicator.style.display = "none";
             guideText.innerText = "💡 読めない文字をタップするとルビが出ます";
             
             const rect = previewImg.getBoundingClientRect();
@@ -180,6 +233,7 @@
                 guideText.innerText = "文字が見つかりませんでした。";
             }
         } catch (err) {
+            loadingIndicator.style.display = "none";
             guideText.innerText = "解析エラーが発生しました";
             console.error(err);
         }

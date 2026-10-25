@@ -276,48 +276,24 @@
     }
 
     async function fetchYahooRuby(text, clickX, clickY) {
-        const apiKey = getApiKey();
-        if (!apiKey) return;
 
-        const oldPopup = overlay.querySelector('.ruby-popup');
-        if (oldPopup) oldPopup.remove();
+    const oldPopup =
+        overlay.querySelector('.ruby-popup');
 
-        const popup = document.createElement('div');
-        popup.className = 'ruby-popup';
-        popup.innerText = "読込中...";
-        popup.style.left = clickX + 'px';
-        popup.style.top = clickY + 'px';
-        overlay.appendChild(popup);
+    if (oldPopup) oldPopup.remove();
 
-        try {
-            const response = await fetch('https://yahooapis.jp', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': `Yahoo AppID: ${apiKey}`
-                },
-                body: JSON.stringify({
-                    id: "1234-1",
-                    jsonrpc: "2.0",
-                    method: "jlp.furiganaservice.furigana",
-                    params: { q: text, grade: 1 }
-                })
-            });
-            const data = await response.json();
-            if (data.result && data.result.word) {
-                let rubyResult = "";
-                const wordData = Array.isArray(data.result.word) ? data.result.word : [data.result.word];
-                wordData.forEach(w => { rubyResult += w.furigana ? w.furigana : w.surface; });
-                popup.innerText = rubyResult;
-            } else {
-                popup.innerText = "読取不可";
-            }
-        } catch (err) {
-            console.error(err);
-            popup.innerText =
-                err.message || "通信エラー";
-        }
-    }
+    const popup =
+        document.createElement('div');
+
+    popup.className = 'ruby-popup';
+
+    popup.style.left = clickX + 'px';
+    popup.style.top = clickY + 'px';
+
+    popup.innerText = text;
+
+    overlay.appendChild(popup);
+}
 
     window.onload = () => {
         if (!localStorage.getItem('YAHOO_CLIENT_ID')) {

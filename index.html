@@ -253,6 +253,7 @@
             const offsetY = (overlay.offsetHeight - rect.height) / 2;
 
             const words = ret.data.words;
+            console.log(ret.data);
             if (words && words.length > 0) {
                 words.forEach(word => {
                     if (/[\u4E00-\u9FFF]/.test(word.text)) {

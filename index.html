@@ -38,7 +38,7 @@
 </div>
 
 <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="onPhotoTaken(event)">
-
+<canvas id="resize-canvas" style="display:none;"></canvas>
 <script>
     function setupApiKey() {
         const savedKey = localStorage.getItem('YAHOO_CLIENT_ID') || '';
@@ -63,6 +63,7 @@
     const overlay = document.getElementById('ocr-overlay');
     const actionBtn = document.getElementById('actionBtn');
     const guideText = document.getElementById('guideText');
+    const resizeCanvas = document.getElementById('resize-canvas');
     let isShowingResult = false;
 
     function handleAction() {
@@ -87,35 +88,57 @@
         if (!files || files.length === 0) return;
         const file = files[0];
 
-        const blobUrl = URL.createObjectURL(file);
-        previewImg.src = blobUrl;
-        previewImg.style.display = 'block';
-        overlay.style.display = 'block';
-        
-        isShowingResult = true;
-        actionBtn.innerText = "次の撮影へ";
-        actionBtn.className = "btn-main status-retry";
-        guideText.innerText = "文字を解析中...";
-        
-        cameraInput.value = "";
-        
-        previewImg.onload = () => { 
-            analyzeImageWithApi(file); 
+        guideText.innerText = "画像を最適化中...";
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const max_size = 1200;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > max_size) { height *= max_size / width; width = max_size; }
+                } else {
+                    if (height > max_size) { width *= max_size / height; height = max_size; }
+                }
+
+                resizeCanvas.width = width;
+                resizeCanvas.height = height;
+                const ctx = resizeCanvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                resizeCanvas.toBlob(function(blob) {
+                    const blobUrl = URL.createObjectURL(blob);
+                    previewImg.src = blobUrl;
+                    previewImg.style.display = 'block';
+                    overlay.style.display = 'block';
+                    
+                    isShowingResult = true;
+                    actionBtn.innerText = "次の撮影へ";
+                    actionBtn.className = "btn-main status-retry";
+                    guideText.innerText = "文字を解析中...";
+
+                    analyzeImageWithApi(blob, width, height);
+                }, 'image/jpeg', 0.8);
+            };
+            img.src = e.target.result;
         };
+        reader.readAsDataURL(file);
+        cameraInput.value = "";
     }
 
-    // 外部の軽量OCR APIを使って文字と座標を特定する処理（スマホの負荷ゼロ）
-    async function analyzeImageWithApi(file) {
+    async function analyzeImageWithApi(blob, naturalWidth, naturalHeight) {
         try {
             const formData = new FormData();
-            formData.append("file", file);
+            formData.append("file", blob, "image.jpg");
             formData.append("language", "jpn");
-            formData.append("isOverlayRequired", "true"); // 座標データを要求
+            formData.append("isOverlayRequired", "true");
 
-            // フリーのOCR API（OCR.Space）を呼び出し
             const response = await fetch("https://ocr.space", {
                 method: "POST",
-                headers: { "apikey": "dontsharethiskey_free" }, // 共有フリーキー
+                headers: { "apikey": "dontsharethiskey_free" },
                 body: formData
             });
 
@@ -129,23 +152,19 @@
             guideText.innerText = "💡 読めない文字をタップするとルビが出ます";
             
             const rect = previewImg.getBoundingClientRect();
-            // OCR.Spaceのデフォルト解像度に対する比率計算
-            const scaleX = rect.width / previewImg.naturalWidth;
-            const scaleY = rect.height / previewImg.naturalHeight;
+            const scaleX = rect.width / naturalWidth;
+            const scaleY = rect.height / naturalHeight;
             const offsetX = (overlay.offsetWidth - rect.width) / 2;
             const offsetY = (overlay.offsetHeight - rect.height) / 2;
 
-            // 認識されたテキストの行・単語データをループ処理
-            const textOverlay = result.ParsedResults[0].TextOverlay;
+            const textOverlay = result.ParsedResults.TextOverlay;
             if (textOverlay && textOverlay.Lines) {
                 textOverlay.Lines.forEach(line => {
                     line.Words.forEach(word => {
-                        // 漢字が含まれている単語かチェック
                         if (/[\u4E00-\u9FFF]/.test(word.WordText)) {
                             const btn = document.createElement('div');
                             btn.className = 'kanji-btn';
                             
-                            // APIから返ってきた座標情報を画面サイズにリサイズして配置
                             btn.style.left = (word.Left * scaleX + offsetX) + 'px';
                             btn.style.top = (word.Top * scaleY + offsetY) + 'px';
                             btn.style.width = (word.Width * scaleX) + 'px';
@@ -159,6 +178,8 @@
                         }
                     });
                 });
+            } else {
+                guideText.innerText = "漢字が見つかりませんでした。";
             }
         } catch (err) {
             guideText.innerText = "解析エラーが発生しました";

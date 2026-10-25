@@ -24,6 +24,7 @@ const OCR = (() => {
       workerPath: BASE + '/worker.min.js',
       corePath: BASE,
       langPath: BASE + '/lang',
+      cacheMethod: 'none', // テスト中は、ブラウザに古いモデルが残って使われるのを防ぐ
       logger: (m) => { if (logCb) logCb(m); },
     });
   }
@@ -35,9 +36,48 @@ const OCR = (() => {
       tessedit_pageseg_mode: String((opts && opts.psm) || 6),
       preserve_interword_spaces: '0',
     });
-    const { data } = await worker.recognize(image);
+    const target = opts && opts.normalize ? normalize(image) : image;
+    const { data } = await worker.recognize(target);
     logCb = null;
     return toLines(data);
+  }
+
+  // 影や明るさのムラを補正する：ぼかした画像を「その場所の紙の明るさ」とみなし、画素をそれで割る
+  // （元の画像と同じ大きさで返すので、座標はそのまま使える）
+  function normalize(src) {
+    const w = src.width;
+    const h = src.height;
+    const sw = Math.max(8, Math.round(w / 16));
+    const sh = Math.max(8, Math.round(h / 16));
+    const small = document.createElement('canvas');
+    small.width = sw; small.height = sh;
+    const sg = small.getContext('2d');
+    sg.imageSmoothingQuality = 'high';
+    sg.drawImage(src, 0, 0, sw, sh);
+    const bgc = document.createElement('canvas');
+    bgc.width = w; bgc.height = h;
+    const bg = bgc.getContext('2d');
+    bg.imageSmoothingQuality = 'high';
+    bg.drawImage(small, 0, 0, w, h);
+
+    const a = src.getContext('2d').getImageData(0, 0, w, h).data;
+    const b = bg.getImageData(0, 0, w, h).data;
+    const out = document.createElement('canvas');
+    out.width = w; out.height = h;
+    const og = out.getContext('2d');
+    const o = og.createImageData(w, h);
+    const od = o.data;
+    for (let i = 0; i < a.length; i += 4) {
+      const g = 0.299 * a[i] + 0.587 * a[i + 1] + 0.114 * a[i + 2];
+      const k = 0.299 * b[i] + 0.587 * b[i + 1] + 0.114 * b[i + 2];
+      let v = Math.min(255, (g * 255) / Math.max(k, 1));
+      v = ((v - 70) * 255) / (225 - 70); // コントラストを少し強める
+      v = v < 0 ? 0 : v > 255 ? 255 : v;
+      od[i] = od[i + 1] = od[i + 2] = v;
+      od[i + 3] = 255;
+    }
+    og.putImageData(o, 0, 0);
+    return out;
   }
 
   function toLines(data) {
@@ -55,6 +95,7 @@ const OCR = (() => {
             end: text.length + t.length,
             bbox: s.bbox,
             isKanji: KANJI.test(t),
+            conf: s.confidence, // OCR自身の確信度（0〜100）
           });
           text += t;
         }

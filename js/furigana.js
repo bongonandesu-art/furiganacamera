@@ -57,18 +57,50 @@ const Furigana = (() => {
     return lastTokens;
   }
 
+  // 名詞の連なり（西京＋焼）や、動詞＋助動詞（食べ＋まし＋た）を一つの語として扱う
+  const isNounish = (t) => t.pos === '名詞' || t.pos === '接頭詞';
+  const isTail = (t) => t.pos === '助動詞' || (t.pos === '動詞' && t.pos_detail_1 === '非自立');
+  const MAX_COMPOUND = 10; // まとめる文字数の上限（長くなりすぎ防止）
+  const HAS_KANJI = /[\u3400-\u9FFF]/;
+
   // 戻り値: { surface, reading, start, end } / 見つからなければ null
   function lookup(lineText, offset) {
     if (!tokenizer) return null;
-    for (const t of tokensOf(lineText)) {
-      const start = t.word_position - 1; // kuromojiのword_positionは1始まり
-      const end = start + t.surface_form.length;
-      if (offset >= start && offset < end) {
-        const reading = UserDict.get(t.surface_form) || toHiragana(t.reading);
-        return { surface: t.surface_form, reading, start, end };
-      }
+
+    // 1) 補正辞書：登録済みの語は最優先
+    const fixed = Corrections.find(lineText, offset);
+    if (fixed) return fixed;
+
+    // 2) 行全体を形態素解析し、タップ位置のトークンを探す
+    const toks = tokensOf(lineText);
+    const pos = (t) => t.word_position - 1; // kuromojiのword_positionは1始まり
+    const i = toks.findIndex((t) => offset >= pos(t) && offset < pos(t) + t.surface_form.length);
+    if (i < 0) return null;
+
+    // 3) 前後のトークンを、一つの語としてまとめる
+    let lo = i;
+    let hi = i;
+    const span = (a, b) => pos(toks[b]) + toks[b].surface_form.length - pos(toks[a]);
+    if (isNounish(toks[i])) {
+      while (lo > 0 && isNounish(toks[lo - 1]) && span(lo - 1, hi) <= MAX_COMPOUND) lo--;
+      while (hi < toks.length - 1 && isNounish(toks[hi + 1]) && span(lo, hi + 1) <= MAX_COMPOUND) hi++;
+    } else if (toks[i].pos === '動詞' || toks[i].pos === '形容詞') {
+      while (hi < toks.length - 1 && isTail(toks[hi + 1])) hi++;
     }
-    return null;
+
+    const members = toks.slice(lo, hi + 1);
+    const start = pos(toks[lo]);
+    const end = pos(toks[hi]) + toks[hi].surface_form.length;
+    const surface = lineText.slice(start, end);
+
+    // 4) 読み：まとめた語の登録 → 各トークンの登録/辞書の読み、の順
+    let reading = UserDict.get(surface);
+    if (!reading) {
+      const parts = members.map((t) => UserDict.get(t.surface_form) || toHiragana(t.reading));
+      const missing = members.some((t, k) => !parts[k] && HAS_KANJI.test(t.surface_form));
+      reading = missing ? '' : parts.join('');
+    }
+    return { surface, reading, start, end };
   }
 
   return { load, lookup };

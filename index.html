@@ -121,6 +121,8 @@
   .p-surface { font-size: 13px; opacity: .72; }
   .p-reading { font-size: 22px; font-weight: 700; letter-spacing: .06em; }
   .p-none { font-size: 14px; font-weight: 400; letter-spacing: 0; }
+  .p-conf { font-size: 11px; opacity: .6; margin-top: 4px; letter-spacing: 0; }
+  .p-warn { font-size: 12px; color: #ffd166; margin-top: 4px; letter-spacing: 0; }
 
   .hint { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
 
@@ -143,7 +145,7 @@
 </head>
 <body>
 <header>
-  <h1>ふりがなビューア</h1>
+  <h1>タップ de ふりがな</h1>
   <span>Ver.1 テスト版</span>
 </header>
 
@@ -188,6 +190,7 @@
         </select>
       </label>
       <label class="check"><input type="checkbox" id="showBoxes" checked>タップできる漢字に枠を表示</label>
+      <label class="check"><input type="checkbox" id="normalize" checked>影や明るさのムラを補正して認識（実験）</label>
     </div>
     <pre id="metrics"></pre>
   </details>
@@ -197,6 +200,7 @@
 <script src="lib/tesseract/tesseract.min.js"></script>
 <script src="lib/kuromoji/kuromoji.js"></script>
 <script src="js/userdict.js"></script>
+<script src="js/corrections.js"></script>
 <script src="js/ocr.js"></script>
 <script src="js/furigana.js"></script>
 
@@ -209,10 +213,11 @@
     camBtn: $('camBtn'), galBtn: $('galBtn'), camIn: $('camIn'), galIn: $('galIn'),
     status: $('status'), stage: $('stage'), base: $('base'), overlay: $('overlay'),
     popup: $('popup'), hint: $('hint'),
-    psm: $('psm'), maxSide: $('maxSide'), showBoxes: $('showBoxes'), metrics: $('metrics'),
+    psm: $('psm'), maxSide: $('maxSide'), showBoxes: $('showBoxes'), normalize: $('normalize'), metrics: $('metrics'),
   };
   const state = { ready: false, busy: false, lines: [], highlight: null };
-  const metrics = { ocrInit: null, dictLoad: null, image: null, ocr: null, kanji: null, tapLookup: null, tapTotal: null };
+  const LOW_CONF = 70; // OCRの確信度がこれ未満の漢字は「自信なし」として示す
+  const metrics = { ocrInit: null, dictLoad: null, image: null, ocr: null, kanji: null, low: null, tapLookup: null, tapTotal: null };
 
   const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
@@ -238,7 +243,7 @@
       '辞書ロード     : ' + f(metrics.dictLoad),
       '画像の読込・縮小: ' + f(metrics.image),
       'OCR処理        : ' + f(metrics.ocr),
-      '検出した漢字   : ' + (metrics.kanji == null ? '—' : metrics.kanji + ' 文字'),
+      '検出した漢字   : ' + (metrics.kanji == null ? '—' : metrics.kanji + ' 文字（うち自信なし ' + metrics.low + '）'),
       'タップ→読み検索: ' + f(metrics.tapLookup),
       'タップ→表示完了: ' + f(metrics.tapTotal),
     ].join('\n');
@@ -325,17 +330,26 @@
       setStatus('文字を解析中… 0%');
       await nextPaint();
       const tOcr = performance.now();
-      const lines = await OCR.recognize(el.base, { psm: el.psm.value }, (m) => {
+      const lines = await OCR.recognize(el.base, { psm: el.psm.value, normalize: el.normalize.checked }, (m) => {
         if (m.status === 'recognizing text') setStatus('文字を解析中… ' + Math.round((m.progress || 0) * 100) + '%');
       });
       metrics.ocr = performance.now() - tOcr;
 
       state.lines = lines;
       let kanji = 0;
-      for (const ln of lines) for (const c of ln.chars) if (c.isKanji) kanji++;
+      let low = 0;
+      for (const ln of lines) {
+        for (const c of ln.chars) {
+          if (!c.isKanji) continue;
+          kanji++;
+          if (c.conf < LOW_CONF) low++;
+        }
+      }
       metrics.kanji = kanji;
+      metrics.low = low;
       if (kanji > 0) {
-        setStatus('解析が終わりました。漢字を ' + kanji + ' 文字見つけました。');
+        setStatus('解析が終わりました。漢字を ' + kanji + ' 文字見つけました。' +
+          (low ? '橙色の破線枠の ' + low + ' 文字は、読み取りに自信がありません。' : ''));
         el.hint.hidden = false;
       } else {
         setStatus('漢字を見つけられませんでした。明るい場所で、文字が横一列になるように撮り直してください。', true);
@@ -360,14 +374,17 @@
     const lw = Math.max(1.5, c.width / 500);
     if (el.showBoxes.checked) {
       g.lineWidth = lw;
-      g.strokeStyle = 'rgba(39, 56, 107, .45)';
       for (const ln of state.lines) {
         for (const ch of ln.chars) {
           if (!ch.isKanji) continue;
           const b = ch.bbox;
+          const weak = ch.conf < LOW_CONF;
+          g.strokeStyle = weak ? 'rgba(214, 90, 20, .9)' : 'rgba(39, 56, 107, .45)';
+          g.setLineDash(weak ? [lw * 2, lw * 1.5] : []);
           g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
         }
       }
+      g.setLineDash([]);
     }
     if (state.highlight) {
       const b = state.highlight;
@@ -454,6 +471,17 @@
       r.classList.add('p-none');
     }
     p.append(s, r);
+    // 上段の文字は「OCRが読み取った文字」。確信度も併せて示し、読み違いを見分けやすくする
+    const conf = document.createElement('div');
+    conf.className = 'p-conf';
+    conf.textContent = 'OCR確信度 ' + Math.round(hit.char.conf);
+    p.append(conf);
+    if (hit.char.conf < LOW_CONF) {
+      const w = document.createElement('div');
+      w.className = 'p-warn';
+      w.textContent = 'この文字は読み取りに自信がありません';
+      p.append(w);
+    }
     p.hidden = false;
 
     const stageW = el.stage.clientWidth;

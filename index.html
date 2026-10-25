@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ふりがなカメラ</title>
+    <title>ふりがなカメラ (辞書機能付き)</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #000; }
@@ -11,14 +11,8 @@
         .view-area { flex: 1; position: relative; width: 100%; background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
         #ocr-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; }
-        .kanji-btn { 
-            position: absolute; 
-            background: rgba(255, 0, 0, 0.2); 
-            border: 1px solid red;
-            cursor: pointer; 
-            z-index: 10; 
-        }
-        .ruby-popup { position: absolute; background: #ffeb3b; color: #000; padding: 5px 10px; border-radius: 4px; font-size: 15px; font-weight: bold; transform: translate(-50%, -130%); z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap; }
+        .kanji-btn { position: absolute; background: rgba(255, 255, 255, 0.01); cursor: pointer; z-index: 10; }
+        .ruby-popup { position: absolute; background: #ffeb3b; color: #000; padding: 5px 10px; border-radius: 4px; font-size: 15px; font-weight: bold; transform: translate(-50%, -130%); z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.5); white-space: nowrap; user-select: none; }
         .guide { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; color: #aaa; background: rgba(0,0,0,0.7); padding: 8px; font-size: 13px; z-index: 10; pointer-events: none; }
         .control-panel { height: 90px; background: #000; display: flex; justify-content: center; align-items: center; border-top: 1px solid #222; z-index: 100; }
         .btn-main { border: none; padding: 14px 45px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer; min-width: 160px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: background 0.2s; }
@@ -26,9 +20,8 @@
         .status-retry { background: #ff9900; color: #fff; }
         .status-load { background: #0076ff; color: #fff; }
         #camera-input { display: none; }
-        .setting-key-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
+        .dictionary-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
 
-        /* 動きのある軽いアニメーション演出 */
         @keyframes pulse {
             0% { opacity: 0.3; transform: scale(0.98); }
             50% { opacity: 1; transform: scale(1); }
@@ -36,21 +29,21 @@
         }
         .loading-animation { display: none; color: #0076ff; font-size: 18px; font-weight: bold; animation: pulse 1.5s infinite ease-in-out; text-align: center; }
     </style>
+    <!-- Tesseract.js（OCRコア）を事前に読み込み -->
+    <script src="https://jsdelivr.net"></script>
 </head>
 <body>
 
-<button class="setting-key-btn" onclick="setupApiKey()">🔑 認証ID設定</button>
+<button class="dictionary-btn" onclick="showDictionaryList()">📖 登録辞書一覧</button>
 
 <div class="container">
     <div class="view-area">
         <img id="preview-img" alt="撮影画像">
         <div id="ocr-overlay"></div>
-        <!-- 動きのあるローディング表示エリア -->
         <div id="loadingIndicator" class="loading-animation">⚡ 解析プログラムを読み込み中...</div>
         <div class="guide" id="guideText">撮影した文章内の漢字にふりがなを付けます</div>
     </div>
     <div class="control-panel">
-        <!-- 最初はプログラム読み込みボタンのみ表示 -->
         <button class="btn-main status-load" id="actionBtn" onclick="initOcrEngine()">解析プログラム読み込み</button>
     </div>
 </div>
@@ -58,24 +51,6 @@
 <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="onPhotoTaken(event)">
 <canvas id="resize-canvas" style="display:none;"></canvas>
 <script>
-    function setupApiKey() {
-        const savedKey = localStorage.getItem('YAHOO_CLIENT_ID') || '';
-        const newKey = prompt('Yahoo!のClient ID（アプリケーションID）を入力してください:', savedKey);
-        if (newKey !== null) {
-            localStorage.setItem('YAHOO_CLIENT_ID', newKey.trim());
-            alert('IDを保存しました。');
-        }
-    }
-
-    function getApiKey() {
-        const key = localStorage.getItem('YAHOO_CLIENT_ID');
-        if (!key) {
-            alert('最初に左上の「🔑 認証ID設定」ボタンからIDを設定してください。');
-            return null;
-        }
-        return key;
-    }
-
     const cameraInput = document.getElementById('camera-input');
     const previewImg = document.getElementById('preview-img');
     const overlay = document.getElementById('ocr-overlay');
@@ -85,12 +60,18 @@
     const loadingIndicator = document.getElementById('loadingIndicator');
     
     let isShowingResult = false;
-    let globalWorker = null; // 読み込んだプログラムをページを閉じるまで保持する変数
+    let globalWorker = null;
 
-    // 【手順2・3】解析プログラムを1度だけ読み込む関数
+    // カスタム辞書の取得・保存関数（LocalStorageを利用）
+    function getCustomDictionary() {
+        return JSON.parse(localStorage.getItem('CUSTOM_RUBY_DICT')) || {};
+    }
+    function saveCustomDictionary(dict) {
+        localStorage.setItem('CUSTOM_RUBY_DICT', JSON.stringify(dict));
+    }
+
+    // OCRエンジンの初期化 (v5の正しい非同期フローに修正)
     async function initOcrEngine() {
-        if (!getApiKey()) return;
-        
         actionBtn.disabled = true;
         actionBtn.style.opacity = "0.5";
         actionBtn.innerText = "通信中...";
@@ -98,21 +79,9 @@
         guideText.innerText = "重要なプログラムを立ち上げています。しばらくお待ちください。";
 
         try {
-            // スクリプトの動的ロード
-            if (typeof Tesseract === 'undefined') {
-                await new Promise((resolve, reject) => {
-                    const script = document.createElement('script');
-                    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-
-            // プログラム（Worker）を初期化して変数に永続保持
+            // Tesseract v5の正しい初期化：createWorkerの時点で言語データを自動セットアップします
             globalWorker = await Tesseract.createWorker('jpn');
             
-            // 読み込み完了時のUI変更
             loadingIndicator.style.display = "none";
             guideText.innerText = "読み込み完了。カメラを起動してください。";
             
@@ -120,7 +89,6 @@
             actionBtn.style.opacity = "1";
             actionBtn.innerText = "カメラを起動";
             actionBtn.className = "btn-main status-shoot";
-            // ボタンのonclickイベントをカメラ起動用に書き換える
             actionBtn.setAttribute("onclick", "handleAction()");
 
         } catch (err) {
@@ -128,12 +96,12 @@
             actionBtn.disabled = false;
             actionBtn.style.opacity = "1";
             actionBtn.innerText = "再試行する";
-            guideText.innerText = "読み込みエラーが発生しました。通信環境を確認して再試行してください。";
+            guideText.innerText = "読み込みエラーが発生しました。再試行してください。";
             console.error("OCRエンジンの読み込みに失敗しました:", err);
         }
     }
 
-    // カメラ起動と再撮影のコントロール（プログラムは絶対に捨てない）
+    // カメラ起動と再撮影のトグル切り替えコントロール
     function handleAction() {
         if (!isShowingResult) {
             cameraInput.click();
@@ -150,15 +118,13 @@
         }
     }
 
+    // 写真撮影・選択時の画像最適化（リサイズ）処理
     function onPhotoTaken(event) {
         const files = event.target.files;
         if (!files || files.length === 0) return;
-
-        // input.files はファイル一覧なので、先頭の写真ファイルを取得する
         const file = files[0];
 
         guideText.innerText = "画像を最適化中...";
-
         const reader = new FileReader();
 
         reader.onerror = function() {
@@ -167,7 +133,6 @@
 
         reader.onload = function(e) {
             const img = new Image();
-
             img.onerror = function() {
                 guideText.innerText = "写真の画像データを開けませんでした。もう一度撮影してください。";
             };
@@ -193,7 +158,6 @@
                     resizeCanvas.width = width;
                     resizeCanvas.height = height;
                     const ctx = resizeCanvas.getContext('2d');
-
                     if (!ctx) {
                         guideText.innerText = "画像を処理できませんでした。";
                         return;
@@ -216,12 +180,10 @@
                         actionBtn.innerText = "次の撮影へ";
                         actionBtn.className = "btn-main status-retry";
 
-                        // アニメーションを「解析中」に変えて再起動
-                        loadingIndicator.innerText = "🔍 文字を解析中（初回プログラムを利用中）...";
+                        loadingIndicator.innerText = "🔍 文字を解析中...";
                         loadingIndicator.style.display = "block";
                         guideText.innerText = "少々お待ちください...";
 
-                        // すでに起動済みの globalWorker を使い回す
                         analyzeImageWithGlobalWorker(blobUrl, width, height);
                     }, 'image/jpeg', 0.7);
                 } catch (error) {
@@ -229,22 +191,19 @@
                     guideText.innerText = "画像の最適化に失敗しました。もう一度撮影してください。";
                 }
             };
-
             img.src = e.target.result;
         };
-
         reader.readAsDataURL(file);
         cameraInput.value = "";
     }
-
-    // すでに読み込み済みのコアプログラムを使い回して高速解析
+    // 読み込み済みの globalWorker で画像内のテキストと座標を抽出
     async function analyzeImageWithGlobalWorker(blobUrl, naturalWidth, naturalHeight) {
         try {
-            // 保持しておいたglobalWorkerで直接認識（再ダウンロードは一切発生しません）
+            // Tesseract v5 の解析メソッドを実行
             const ret = await globalWorker.recognize(blobUrl);
             
             loadingIndicator.style.display = "none";
-            guideText.innerText = "💡 読めない文字をタップするとルビが出ます";
+            guideText.innerText = "💡 漢字をタップするとルビが出ます（ルビ長押しで修正）";
             
             const rect = previewImg.getBoundingClientRect();
             const scaleX = rect.width / naturalWidth;
@@ -253,17 +212,14 @@
             const offsetY = (overlay.offsetHeight - rect.height) / 2;
 
             const words = ret.data.words;
-            console.log(ret.data);
             if (words && words.length > 0) {
                 words.forEach(word => {
+                    // 単語の中に「漢字」が1文字でも含まれていればタップ対象にする
                     if (/[\u4E00-\u9FFF]/.test(word.text)) {
                         const btn = document.createElement('div');
                         btn.className = 'kanji-btn';
                         
-                        btn.innerText = word.text;
-                        btn.style.fontSize = "16px";
-                        btn.style.color = "blue";
-                        
+                        // 正しい位置にマッピングするための座標計算
                         btn.style.left = (word.bbox.x0 * scaleX + offsetX) + 'px';
                         btn.style.top = (word.bbox.y0 * scaleY + offsetY) + 'px';
                         btn.style.width = ((word.bbox.x1 - word.bbox.x0) * scaleX) + 'px';
@@ -271,7 +227,7 @@
 
                         btn.onclick = (e) => {
                             e.stopPropagation();
-                            fetchYahooRuby(word.text, e.clientX, e.clientY);
+                            fetchRubyAndShow(word.text, e.clientX, e.clientY);
                         };
                         overlay.appendChild(btn);
                     }
@@ -286,31 +242,95 @@
         }
     }
 
-    async function fetchYahooRuby(text, clickX, clickY) {
+    // ルビの表示と辞書チェック（CORS問題をクリアする設計に補正）
+    async function fetchRubyAndShow(text, clickX, clickY) {
+        const oldPopup = overlay.querySelector('.ruby-popup');
+        if (oldPopup) oldPopup.remove();
 
-    const oldPopup =
-        overlay.querySelector('.ruby-popup');
+        const popup = document.createElement('div');
+        popup.className = 'ruby-popup';
+        popup.innerText = "読込中...";
+        popup.style.left = clickX + 'px';
+        popup.style.top = clickY + 'px';
+        overlay.appendChild(popup);
 
-    if (oldPopup) oldPopup.remove();
+        const cleanText = text.replace(/[\s\n]/g, "");
 
-    const popup =
-        document.createElement('div');
-
-    popup.className = 'ruby-popup';
-
-    popup.style.left = clickX + 'px';
-    popup.style.top = clickY + 'px';
-
-    popup.innerText = text;
-
-    overlay.appendChild(popup);
-}
-
-    window.onload = () => {
-        if (!localStorage.getItem('YAHOO_CLIENT_ID')) {
-            setupApiKey();
+        // --- 【最優先】自作カスタム辞書に登録がある場合は上書き適用 ---
+        const dict = getCustomDictionary();
+        if (dict[cleanText]) {
+            popup.innerText = dict[cleanText];
+            setupPopupEditEvent(popup, cleanText);
+            return;
         }
-    };
+
+        try {
+            // Yahoo APIの代わりにブラウザから直叩き（CORS制限なし）できる無料エンドポイントを利用
+            const res = await fetch(`https://googleapis.com{encodeURIComponent(cleanText)}`);
+            const data = await res.json();
+            
+            if (data && data[0] && data[0][0] && data[0][0][0]) {
+                // 返却されたひらがな/カタカナテキストを表示
+                popup.innerText = data[0][0][0];
+            } else {
+                popup.innerText = cleanText; // 取得できなかった場合は元の文字をフォールバック表示
+            }
+        } catch (err) {
+            // オフラインやエラー時も、自作辞書を育てるために元の文字を表示して編集可能にする
+            popup.innerText = cleanText; 
+            console.error("外部ルビ振り通信エラー（自作辞書機能は有効です）:", err);
+        }
+
+        setupPopupEditEvent(popup, cleanText);
+    }
+
+    // ポップアップを「長押し」または「ダブルクリック」したときに自作辞書に上書き保存させる処理
+    function setupPopupEditEvent(popup, originalText) {
+        const editTrigger = () => {
+            const currentRuby = popup.innerText;
+            const newRuby = prompt(`「${originalText}」の正しい読み方を辞書登録（補正）しますか？`, currentRuby);
+            if (newRuby !== null) {
+                const trimmed = newRuby.trim();
+                const dict = getCustomDictionary();
+                
+                if (trimmed === "" || trimmed === originalText) {
+                    delete dict[originalText]; // 空欄か元の文字なら辞書から削除
+                    alert("辞書登録を解除しました。");
+                    popup.innerText = originalText;
+                } else {
+                    dict[originalText] = trimmed; // 新しい読み方を辞書に登録
+                    alert(`辞書に登録しました：\n${originalText} ➔ ${trimmed}`);
+                    popup.innerText = trimmed;
+                }
+                saveCustomDictionary(dict);
+            }
+        };
+
+        // スマホ用：長押し（コンテキストメニューを考慮し600msホールドで起動）
+        let pressTimer;
+        popup.addEventListener('touchstart', () => {
+            pressTimer = setTimeout(editTrigger, 600);
+        });
+        popup.addEventListener('touchend', () => clearTimeout(pressTimer));
+        
+        // PC・テスト用：ダブルクリック
+        popup.addEventListener('dblclick', editTrigger);
+    }
+
+    // 現在LocalStorageに登録されているカスタム辞書の一覧確認
+    function showDictionaryList() {
+        const dict = getCustomDictionary();
+        const keys = Object.keys(dict);
+        if (keys.length === 0) {
+            alert("現在、辞書登録されている単語はありません。\n漢字をタップして、出てきたルビを長押しすると好きな読み方を登録できます。");
+            return;
+        }
+        let msg = "【登録済みカスタム辞書一覧】\n\n";
+        keys.forEach(k => {
+            msg += `・${k} ➔ ${dict[k]}\n`;
+        });
+        alert(msg);
+    }
 </script>
 </body>
 </html>

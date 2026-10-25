@@ -1,378 +1,488 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ふりがなカメラ (本家踏襲・辞書付)</title>
-    <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; overflow: hidden; font-family: sans-serif; background: #000; }
-        .container { display: flex; flex-direction: column; width: 100%; height: 100%; }
-        .view-area { flex: 1; position: relative; width: 100%; background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden; }
-        #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
-        #ocr-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; }
-        .kanji-btn { position: absolute; background: rgba(0, 204, 102, 0.15); border: 1px solid rgba(0, 204, 102, 0.5); cursor: pointer; z-index: 10; border-radius: 2px; }
-        .ruby-popup { position: absolute; background: #ffeb3b; color: #000; padding: 5px 10px; border-radius: 4px; font-size: 15px; font-weight: bold; transform: translate(-50%, -130%); z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.5); white-space: nowrap; user-select: none; }
-        .guide { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; color: #aaa; background: rgba(0,0,0,0.7); padding: 8px; font-size: 13px; z-index: 10; pointer-events: none; }
-        .control-panel { height: 90px; background: #000; display: flex; justify-content: center; align-items: center; border-top: 1px solid #222; z-index: 100; }
-        .btn-main { border: none; padding: 14px 45px; font-size: 18px; font-weight: bold; border-radius: 30px; cursor: pointer; min-width: 160px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.3); transition: background 0.2s; }
-        .status-shoot { background: #00cc66; color: #fff; }
-        .status-retry { background: #ff9900; color: #fff; }
-        #camera-input { display: none; }
-        .setting-key-btn { position: absolute; top: 10px; left: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
-        .dict-list-btn { position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.2); color: #fff; border: none; padding: 5px 10px; font-size: 11px; border-radius: 4px; z-index: 200; cursor: pointer; }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>タップ de ふりがな</title>
+<style>
+  :root {
+    --ink: #1c2331;
+    --indigo: #27386b;
+    --indigo-dark: #1a2750;
+    --mist: #eef1f5;
+    --line: #cfd6e0;
+    --paper: #ffffff;
+    --amber: #f2b705;
+    --muted: #5d6879;
+    --danger: #b3261e;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--mist);
+    color: var(--ink);
+    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
+    line-height: 1.6;
+  }
+  header {
+    background: var(--indigo);
+    color: #fff;
+    padding: 14px 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .04em; }
+  header span { font-size: 12px; opacity: .75; }
+  main { max-width: 720px; margin: 0 auto; padding: 14px 14px 40px; }
 
-        @keyframes pulse {
-            0% { opacity: 0.3; transform: scale(0.98); }
-            50% { opacity: 1; transform: scale(1); }
-            100% { opacity: 0.3; transform: scale(0.98); }
-        }
-        .loading-animation { display: none; color: #0076ff; font-size: 18px; font-weight: bold; animation: pulse 1.5s infinite ease-in-out; text-align: center; }
-    </style>
+  .card {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .btn {
+    appearance: none;
+    border: 1px solid var(--indigo);
+    background: var(--paper);
+    color: var(--indigo);
+    font: inherit;
+    font-weight: 700;
+    min-height: 48px;
+    padding: 0 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn.primary { background: var(--indigo); color: #fff; }
+  .btn:active:not(:disabled) { background: var(--indigo-dark); color: #fff; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn:focus-visible, select:focus-visible, summary:focus-visible {
+    outline: 3px solid var(--amber);
+    outline-offset: 2px;
+  }
+
+  .bar { height: 8px; background: var(--mist); border-radius: 4px; overflow: hidden; margin: 12px 0 8px; }
+  #barFill { height: 100%; width: 0; background: var(--indigo); transition: width .25s; }
+  .bar.pulse #barFill { animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .bar.pulse #barFill { animation: none; } }
+
+  .msg { margin: 0; font-size: 14px; color: var(--muted); }
+  .msg.error { color: var(--danger); font-weight: 700; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  #status { min-height: 22px; margin-bottom: 8px; }
+
+  .stage {
+    position: relative;
+    width: 100%;
+    line-height: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+    touch-action: manipulation;
+  }
+  .stage canvas { display: block; width: 100%; height: auto; }
+  #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
+
+  .popup {
+    position: absolute;
+    z-index: 5;
+    max-width: 92%;
+    padding: 8px 14px 10px;
+    background: var(--indigo-dark);
+    color: #fff;
+    border-radius: 8px;
+    text-align: center;
+    line-height: 1.3;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
+  }
+  .popup::after {
+    content: "";
+    position: absolute;
+    left: var(--ax, 50%);
+    top: 100%;
+    margin-left: -7px;
+    border: 7px solid transparent;
+    border-top-color: var(--indigo-dark);
+  }
+  .popup.below::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--indigo-dark);
+  }
+  .p-surface { font-size: 13px; opacity: .72; }
+  .p-reading { font-size: 22px; font-weight: 700; letter-spacing: .06em; }
+  .p-none { font-size: 14px; font-weight: 400; letter-spacing: 0; }
+
+  .hint { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
+
+  details.debug { margin-top: 18px; }
+  details.debug summary { cursor: pointer; font-size: 14px; color: var(--muted); }
+  .opts { display: grid; gap: 10px; margin: 12px 0; font-size: 14px; }
+  .opts label { display: grid; gap: 4px; }
+  .opts select {
+    font: inherit; min-height: 42px; border: 1px solid var(--line); border-radius: 6px;
+    padding: 0 8px; background: #fff; color: var(--ink);
+  }
+  .opts .check { display: flex; align-items: center; gap: 8px; }
+  .opts .check input { width: 20px; height: 20px; }
+  #metrics {
+    margin: 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line);
+    border-radius: 6px; font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+    font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  }
+</style>
 </head>
 <body>
+<header>
+  <h1>ふりがなビューア</h1>
+  <span>Ver.1 テスト版</span>
+</header>
 
-<button class="setting-key-btn" onclick="setupGoogleApiKey()">🔑 Google APIキー設定</button>
-<button class="dict-list-btn" onclick="showDictionaryList()">📖 辞書一覧</button>
+<main>
+  <section class="card">
+    <button id="loadBtn" class="btn primary" type="button">データ取得</button>
+    <div class="bar" id="bar"><div id="barFill"></div></div>
+    <p class="msg" id="loadMsg">最初に「データ取得」を押してください。初回だけ時間がかかります。</p>
+  </section>
 
-<div class="container">
-    <div class="view-area">
-        <img id="preview-img" alt="撮影画像">
-        <div id="ocr-overlay"></div>
-        <div id="loadingIndicator" class="loading-animation">⚡ サーバーで文字を解析中...</div>
-        <div class="guide" id="guideText">漢字をタップするとルビが出ます。長押しで辞書修正。</div>
+  <div class="row">
+    <button id="camBtn" class="btn" type="button" disabled>撮影する</button>
+    <button id="galBtn" class="btn" type="button" disabled>ギャラリーから選ぶ</button>
+  </div>
+  <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
+  <input id="galIn" type="file" accept="image/*" hidden>
+
+  <p class="msg" id="status"></p>
+
+  <div class="stage" id="stage" hidden>
+    <canvas id="base"></canvas>
+    <canvas id="overlay"></canvas>
+    <div class="popup" id="popup" hidden></div>
+  </div>
+  <p class="hint" id="hint" hidden>読みを知りたい漢字をタップしてください。</p>
+
+  <details class="debug">
+    <summary>計測と設定</summary>
+    <div class="opts">
+      <label>認識モード
+        <select id="psm">
+          <option value="6" selected>単一ブロック（書類向け・推奨）</option>
+          <option value="3">自動レイアウト（段組みが多い場合）</option>
+          <option value="4">1列・文字サイズが混在</option>
+        </select>
+      </label>
+      <label>画像サイズの上限（長辺）
+        <select id="maxSide">
+          <option value="1200">1200px（速い）</option>
+          <option value="1600" selected>1600px</option>
+          <option value="2000">2000px（精度重視）</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="showBoxes" checked>タップできる漢字に枠を表示</label>
     </div>
-    <div class="control-panel">
-        <button class="btn-main status-shoot" id="actionBtn" onclick="handleAction()">カメラを起動</button>
-    </div>
-</div>
+    <pre id="metrics"></pre>
+  </details>
+</main>
 
-<input type="file" id="camera-input" accept="image/*" capture="environment" onchange="onPhotoTaken(event)">
-<canvas id="resize-canvas" style="display:none;"></canvas>
+<!-- ライブラリは lib/ に自前で同梱（外部通信なし）。入手方法は README.md を参照 -->
+<script src="lib/tesseract/tesseract.min.js"></script>
+<script src="lib/kuromoji/kuromoji.js"></script>
+<script src="js/userdict.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/furigana.js"></script>
+
 <script>
-    const cameraInput = document.getElementById('camera-input');
-    const previewImg = document.getElementById('preview-img');
-    const overlay = document.getElementById('ocr-overlay');
-    const actionBtn = document.getElementById('actionBtn');
-    const guideText = document.getElementById('guideText');
-    const resizeCanvas = document.getElementById('resize-canvas');
-    const loadingIndicator = document.getElementById('loadingIndicator');
-    
-    let isShowingResult = false;
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    loadBtn: $('loadBtn'), bar: $('bar'), barFill: $('barFill'), loadMsg: $('loadMsg'),
+    camBtn: $('camBtn'), galBtn: $('galBtn'), camIn: $('camIn'), galIn: $('galIn'),
+    status: $('status'), stage: $('stage'), base: $('base'), overlay: $('overlay'),
+    popup: $('popup'), hint: $('hint'),
+    psm: $('psm'), maxSide: $('maxSide'), showBoxes: $('showBoxes'), metrics: $('metrics'),
+  };
+  const state = { ready: false, busy: false, lines: [], highlight: null };
+  const metrics = { ocrInit: null, dictLoad: null, image: null, ocr: null, kanji: null, tapLookup: null, tapTotal: null };
 
-    // Google Cloud Vision APIキーの管理
-    function setupGoogleApiKey() {
-        const savedKey = localStorage.getItem('GOOGLE_VISION_API_KEY') || '';
-        const newKey = prompt('Google Cloud VisionのAPIキーを入力してください:', savedKey);
-        if (newKey !== null) {
-            localStorage.setItem('GOOGLE_VISION_API_KEY', newKey.trim());
-            alert('キーを保存しました。');
-        }
+  const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
+
+  // ---------- 表示まわり ----------
+  function setProgress(frac, msg, pulse) {
+    el.barFill.style.width = Math.round(frac * 100) + '%';
+    el.bar.classList.toggle('pulse', !!pulse);
+    if (msg) { el.loadMsg.textContent = msg; el.loadMsg.classList.remove('error'); }
+  }
+  function setError(msg) { el.loadMsg.textContent = msg; el.loadMsg.classList.add('error'); }
+  function setStatus(msg, isError) {
+    el.status.textContent = msg || '';
+    el.status.classList.toggle('error', !!isError);
+  }
+  function setBusy(b) {
+    state.busy = b;
+    el.camBtn.disabled = el.galBtn.disabled = b || !state.ready;
+  }
+  function renderMetrics() {
+    const f = (v) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + ' 秒' : v.toFixed(1) + ' ms');
+    el.metrics.textContent = [
+      'OCRエンジン準備 : ' + f(metrics.ocrInit),
+      '辞書ロード     : ' + f(metrics.dictLoad),
+      '画像の読込・縮小: ' + f(metrics.image),
+      'OCR処理        : ' + f(metrics.ocr),
+      '検出した漢字   : ' + (metrics.kanji == null ? '—' : metrics.kanji + ' 文字'),
+      'タップ→読み検索: ' + f(metrics.tapLookup),
+      'タップ→表示完了: ' + f(metrics.tapTotal),
+    ].join('\n');
+  }
+
+  // ---------- データ取得（OCRエンジン + 辞書を一度だけロード） ----------
+  const OCR_STEPS = ['loading tesseract core', 'initializing tesseract', 'loading language traineddata', 'initializing api'];
+  const OCR_LABEL = ['OCRエンジンを読み込み中', 'OCRエンジンを初期化中', '日本語データを読み込み中', 'OCRを準備中'];
+
+  el.loadBtn.addEventListener('click', async () => {
+    el.loadBtn.disabled = true;
+    try {
+      const t0 = performance.now();
+      setProgress(0.02, 'OCRエンジンを準備中…');
+      await nextPaint();
+      await OCR.init((m) => {
+        const i = OCR_STEPS.indexOf(m.status);
+        if (i >= 0) setProgress(0.3 * (i + (m.progress || 0)) / OCR_STEPS.length, OCR_LABEL[i] + '…');
+      });
+      metrics.ocrInit = performance.now() - t0;
+
+      const t1 = performance.now();
+      await Furigana.load((p, msg, pulse) => setProgress(0.3 + 0.7 * p, msg, pulse));
+      await UserDict.init();
+      metrics.dictLoad = performance.now() - t1;
+
+      state.ready = true;
+      setBusy(false);
+      setProgress(1, '準備ができました。撮影するか、ギャラリーから画像を選んでください。');
+      el.loadBtn.textContent = 'データ取得済み';
+    } catch (e) {
+      console.error(e);
+      setProgress(0, null, false);
+      setError('データ取得に失敗しました: ' + (e && e.message ? e.message : e));
+      el.loadBtn.disabled = false;
+      el.loadBtn.textContent = 'データ取得をやり直す';
     }
+    renderMetrics();
+  });
 
-    function getGoogleApiKey() {
-        const key = localStorage.getItem('GOOGLE_VISION_API_KEY');
-        if (!key) {
-            alert('最初に左上の「🔑 Google APIキー設定」ボタンからAPIキーを設定してください。');
-            return null;
-        }
-        return key;
+  // ---------- 画像の取り込み ----------
+  el.camBtn.addEventListener('click', () => el.camIn.click());
+  el.galBtn.addEventListener('click', () => el.galIn.click());
+  el.camIn.addEventListener('change', () => handleFile(el.camIn.files[0]));
+  el.galIn.addEventListener('change', () => handleFile(el.galIn.files[0]));
+
+  async function loadBitmap(file) {
+    if ('createImageBitmap' in window) {
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { /* 下のImageで読む */ }
     }
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = () => reject(new Error('画像を読み込めませんでした'));
+      img.src = url;
+    });
+  }
 
-    // カメラ起動と再撮影のトグル切り替え（本家を踏襲し、起動ロード時間はゼロ）
-    function handleAction() {
-        if (!isShowingResult) {
-            if (!getGoogleApiKey()) return;
-            cameraInput.click();
-        } else {
-            isShowingResult = false;
-            actionBtn.innerText = "カメラを起動";
-            actionBtn.className = "btn-main status-shoot";
-            guideText.innerText = "漢字をタップするとルビが出ます。長押しで辞書修正。";
-            if (previewImg.src.startsWith('blob:')) { URL.revokeObjectURL(previewImg.src); }
-            previewImg.src = "";
-            previewImg.style.display = 'none';
-            overlay.innerHTML = '';
-            overlay.style.display = 'none';
-        }
+  async function handleFile(file) {
+    if (!file || state.busy) return;
+    setBusy(true);
+    hidePopup();
+    state.highlight = null;
+    state.lines = [];
+    try {
+      setStatus('画像を読み込み中…');
+      await nextPaint();
+      const tImg = performance.now();
+      const bmp = await loadBitmap(file);
+      const maxSide = parseInt(el.maxSide.value, 10);
+      const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
+      const w = Math.round(bmp.width * scale);
+      const h = Math.round(bmp.height * scale);
+      el.base.width = el.overlay.width = w;
+      el.base.height = el.overlay.height = h;
+      el.base.getContext('2d').drawImage(bmp, 0, 0, w, h);
+      if (bmp.close) bmp.close();
+      metrics.image = performance.now() - tImg;
+      el.stage.hidden = false;
+      el.hint.hidden = true;
+      drawOverlay();
+
+      setStatus('文字を解析中… 0%');
+      await nextPaint();
+      const tOcr = performance.now();
+      const lines = await OCR.recognize(el.base, { psm: el.psm.value }, (m) => {
+        if (m.status === 'recognizing text') setStatus('文字を解析中… ' + Math.round((m.progress || 0) * 100) + '%');
+      });
+      metrics.ocr = performance.now() - tOcr;
+
+      state.lines = lines;
+      let kanji = 0;
+      for (const ln of lines) for (const c of ln.chars) if (c.isKanji) kanji++;
+      metrics.kanji = kanji;
+      if (kanji > 0) {
+        setStatus('解析が終わりました。漢字を ' + kanji + ' 文字見つけました。');
+        el.hint.hidden = false;
+      } else {
+        setStatus('漢字を見つけられませんでした。明るい場所で、文字が横一列になるように撮り直してください。', true);
+      }
+      drawOverlay();
+    } catch (e) {
+      console.error(e);
+      setStatus('画像の処理に失敗しました: ' + (e && e.message ? e.message : e), true);
+    } finally {
+      el.camIn.value = '';
+      el.galIn.value = '';
+      setBusy(false);
+      renderMetrics();
     }
+  }
 
-    // 写真撮影・選択時の画像最適化（リサイズ＆データ軽量化）処理
-    function onPhotoTaken(event) {
-        const files = event.target.files;
-        if (!files || files.length === 0) return;
-        const file = files[0];
+  // ---------- 描画（タップできる漢字の枠 / 選択中の単語） ----------
+  function drawOverlay() {
+    const c = el.overlay;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, c.width, c.height);
+    const lw = Math.max(1.5, c.width / 500);
+    if (el.showBoxes.checked) {
+      g.lineWidth = lw;
+      g.strokeStyle = 'rgba(39, 56, 107, .45)';
+      for (const ln of state.lines) {
+        for (const ch of ln.chars) {
+          if (!ch.isKanji) continue;
+          const b = ch.bbox;
+          g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+        }
+      }
+    }
+    if (state.highlight) {
+      const b = state.highlight;
+      g.fillStyle = 'rgba(242, 183, 5, .38)';
+      g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+      g.lineWidth = lw * 1.5;
+      g.strokeStyle = 'rgba(200, 140, 0, .95)';
+      g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
+    }
+  }
+  el.showBoxes.addEventListener('change', drawOverlay);
 
-        guideText.innerText = "画像を最適化中...";
-        const reader = new FileReader();
+  // ---------- タップ判定 ----------
+  // 画像座標(x, y)に最も近い文字を返す。遠すぎる場合は null
+  function hitTest(x, y) {
+    let best = null;
+    let bestD = Infinity;
+    for (const ln of state.lines) {
+      const lb = ln.bbox || ln.chars[0].bbox;
+      const pad = Math.max(8, (lb.y1 - lb.y0) * 0.4);
+      if (x < lb.x0 - pad || x > lb.x1 + pad || y < lb.y0 - pad || y > lb.y1 + pad) continue;
+      for (const ch of ln.chars) {
+        const b = ch.bbox;
+        const size = Math.max(b.x1 - b.x0, b.y1 - b.y0);
+        const d = Math.hypot(x - (b.x0 + b.x1) / 2, y - (b.y0 + b.y1) / 2);
+        if (d <= size * 0.8 && d < bestD) { best = { line: ln, char: ch }; bestD = d; }
+      }
+    }
+    return best;
+  }
 
-        reader.onerror = function() {
-            guideText.innerText = "写真を読み込めませんでした。もう一度撮影してください。";
+  el.stage.addEventListener('click', (ev) => {
+    if (!state.lines.length) return;
+    const t0 = performance.now();
+    const rect = el.base.getBoundingClientRect();
+    const x = (ev.clientX - rect.left) * el.base.width / rect.width;
+    const y = (ev.clientY - rect.top) * el.base.height / rect.height;
+    const hit = hitTest(x, y);
+    if (!hit || !hit.char.isKanji) {
+      hidePopup();
+      state.highlight = null;
+      drawOverlay();
+      return;
+    }
+    const t1 = performance.now();
+    const info = Furigana.lookup(hit.line.text, hit.char.start);
+    const t2 = performance.now();
+
+    // 読みの対象になった単語の範囲を黄色で示す
+    let range = hit.char.bbox;
+    if (info) {
+      const members = hit.line.chars.filter((c) => c.start >= info.start && c.start < info.end);
+      if (members.length) {
+        range = {
+          x0: Math.min(...members.map((c) => c.bbox.x0)), y0: Math.min(...members.map((c) => c.bbox.y0)),
+          x1: Math.max(...members.map((c) => c.bbox.x1)), y1: Math.max(...members.map((c) => c.bbox.y1)),
         };
-
-        reader.onload = function(e) {
-            const img = new Image();
-            img.onerror = function() {
-                guideText.innerText = "写真データを開けませんでした。もう一度撮影してください。";
-            };
-
-            img.onload = function() {
-                try {
-                    // サーバー送信速度と認識精度を高めるため、最大長を1200pxにリサイズ
-                    const max_size = 1200;
-                    let width = img.width;
-                    let height = img.height;
-
-                    if (width > height) {
-                        if (width > max_size) {
-                            height = Math.round(height * max_size / width);
-                            width = max_size;
-                        }
-                    } else {
-                        if (height > max_size) {
-                            width = Math.round(width * max_size / height);
-                            height = max_size;
-                        }
-                    }
-
-                    resizeCanvas.width = width;
-                    resizeCanvas.height = height;
-                    const ctx = resizeCanvas.getContext('2d');
-                    if (!ctx) {
-                        guideText.innerText = "画像を処理できませんでした。";
-                        return;
-                    }
-
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // 画質を0.8に落として送信データ量を抑え、本家並みの超高速通信を実現
-                    resizeCanvas.toBlob(function(blob) {
-                        if (!blob) {
-                            guideText.innerText = "画像の最適化に失敗しました。もう一度撮影してください。";
-                            return;
-                        }
-
-                        const blobUrl = URL.createObjectURL(blob);
-                        previewImg.src = blobUrl;
-                        previewImg.style.display = 'block';
-                        overlay.style.display = 'block';
-
-                        isShowingResult = true;
-                        actionBtn.innerText = "次の撮影へ";
-                        actionBtn.className = "btn-main status-retry";
-
-                        loadingIndicator.style.display = "block";
-                        guideText.innerText = "少々お待ちください...";
-
-                        // 次のステップのGoogle OCR処理へ（03で定義）
-                        analyzeImageWithGoogleCloudVision(blob, width, height);
-                    }, 'image/jpeg', 0.8);
-                } catch (error) {
-                    console.error("画像の最適化に失敗しました:", error);
-                    guideText.innerText = "画像の最適化に失敗しました。もう一度撮影してください。";
-                }
-            };
-            img.src = e.target.result;
-        };
-        reader.readAsDataURL(file);
-        cameraInput.value = "";
+      }
     }
-    // Google Cloud Vision API を叩いて高速に文字と座標（位置情報）を取得する処理
-    function analyzeImageWithGoogleCloudVision(blob, naturalWidth, naturalHeight) {
-        const apiKey = getGoogleApiKey();
-        if (!apiKey) {
-            loadingIndicator.style.display = "none";
-            return;
-        }
+    state.highlight = range;
+    drawOverlay();
+    showPopup(hit, info, range);
 
-        // BlobデータをAPIに送信可能なBase64文字列に変換する処理
-        const reader = new FileReader();
-        reader.onloadend = async function() {
-            const base64Image = reader.result.split(',')[1];
+    metrics.tapLookup = t2 - t1;
+    metrics.tapTotal = performance.now() - t0;
+    renderMetrics();
+  });
 
-            // Google Cloud Vision API (TEXT_DETECTION) へのリクエスト構成
-            const url = `https://googleapis.com{apiKey}`;
-            const requestBody = {
-                requests: [
-                    {
-                        image: { content: base64Image },
-                        features: [{ type: "TEXT_DETECTION" }]
-                    }
-                ]
-            };
+  // ---------- ポップアップ ----------
+  function hidePopup() { el.popup.hidden = true; }
 
-            try {
-                const response = await fetch(url, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(requestBody)
-                });
-                const data = await response.json();
-
-                loadingIndicator.style.display = "none";
-                guideText.innerText = "💡 漢字をタップするとルビが出ます（長押しで辞書修正）";
-
-                // 画面上の表示サイズとカメラ写真の解像度の比率を計算し、枠のズレを防止
-                const rect = previewImg.getBoundingClientRect();
-                const scaleX = rect.width / naturalWidth;
-                const scaleY = rect.height / naturalHeight;
-                const offsetX = (overlay.offsetWidth - rect.width) / 2;
-                const offsetY = (overlay.offsetHeight - rect.height) / 2;
-
-                // 単語（ブロック）ごのテキストと境界ボックスを抽出
-                const annotations = data.responses[0]?.textAnnotations;
-                
-                // annotations[0]は全体テキストなので、1番目以降の個別単語データをループ処理
-                if (annotations && annotations.length > 1) {
-                    for (let i = 1; i < annotations.length; i++) {
-                        const annotation = annotations[i];
-                        const text = annotation.description;
-
-                        // 単語の中に「漢字」が1文字でも含まれていればタップ可能なボタンにする
-                        if (/[\u4E00-\u9FFF]/.test(text)) {
-                            const vertices = annotation.boundingPoly.vertices;
-                            
-                            // 4つの角の座標から、左上(x0, y0)と右下(x1, y1)の最大最小を安全に算出
-                            const xs = vertices.map(v => v.x ?? 0);
-                            const ys = vertices.map(v => v.y ?? 0);
-                            const x0 = Math.min(...xs);
-                            const x1 = Math.max(...xs);
-                            const y0 = Math.min(...ys);
-                            const y1 = Math.max(...ys);
-
-                            const btn = document.createElement('div');
-                            btn.className = 'kanji-btn';
-                            
-                            // スマホ画面の解像度に合わせてボタン（緑枠）を正確な位置へ配置
-                            btn.style.left = (x0 * scaleX + offsetX) + 'px';
-                            btn.style.top = (y0 * scaleY + offsetY) + 'px';
-                            btn.style.width = ((x1 - x0) * scaleX) + 'px';
-                            btn.style.height = ((y1 - y0) * scaleY) + 'px';
-
-                            // 漢字ボタンがタップされたら、ルビ表示および辞書チェック処理へ（04で定義）
-                            btn.onclick = (e) => {
-                                e.stopPropagation();
-                                fetchRubyAndShow(text, e.clientX, e.clientY);
-                            };
-                            overlay.appendChild(btn);
-                        }
-                    }
-                } else {
-                    guideText.innerText = "文字が検出されませんでした。もう一度試してください。";
-                }
-            } catch (err) {
-                loadingIndicator.style.display = "none";
-                guideText.innerText = "サーバー解析エラーが発生しました。";
-                console.error("Google Vision API Error:", err);
-            }
-        };
-        reader.readAsDataURL(blob);
+  function showPopup(hit, info, range) {
+    const p = el.popup;
+    p.textContent = '';
+    const s = document.createElement('div');
+    s.className = 'p-surface';
+    s.textContent = info ? info.surface : hit.char.ch;
+    const r = document.createElement('div');
+    r.className = 'p-reading';
+    if (info && info.reading) {
+      r.textContent = info.reading;
+    } else {
+      r.textContent = '読みを取得できません';
+      r.classList.add('p-none');
     }
-    // カスタム辞書の取得・保存関数（LocalStorageを利用）
-    function getCustomDictionary() {
-        return JSON.parse(localStorage.getItem('CUSTOM_RUBY_DICT')) || {};
-    }
-    function saveCustomDictionary(dict) {
-        localStorage.setItem('CUSTOM_RUBY_DICT', JSON.stringify(dict));
-    }
+    p.append(s, r);
+    p.hidden = false;
 
-    // ルビの表示と辞書チェック（CORS問題をクリアする無料高速エンドポイントを利用）
-    async function fetchRubyAndShow(text, clickX, clickY) {
-        const oldPopup = overlay.querySelector('.ruby-popup');
-        if (oldPopup) oldPopup.remove();
+    const stageW = el.stage.clientWidth;
+    const stageH = el.stage.clientHeight;
+    const sx = stageW / el.base.width;
+    const sy = stageH / el.base.height;
+    const cx = (range.x0 + range.x1) / 2 * sx;
+    const top = range.y0 * sy;
+    const bottom = range.y1 * sy;
+    const pw = p.offsetWidth;
+    const ph = p.offsetHeight;
+    const gap = 10;
 
-        const popup = document.createElement('div');
-        popup.className = 'ruby-popup';
-        popup.innerText = "読込中...";
-        popup.style.left = clickX + 'px';
-        popup.style.top = clickY + 'px';
-        overlay.appendChild(popup);
+    const centerX = Math.min(Math.max(cx, pw / 2 + 4), stageW - pw / 2 - 4);
+    const below = top - ph - gap < 0;
+    p.style.left = (centerX - pw / 2) + 'px';
+    p.style.top = (below ? bottom + gap : top - ph - gap) + 'px';
+    p.classList.toggle('below', below);
+    const arrowX = Math.min(Math.max(cx - (centerX - pw / 2), 14), pw - 14);
+    p.style.setProperty('--ax', arrowX + 'px');
+  }
 
-        const cleanText = text.replace(/[\s\n]/g, "");
-
-        // --- 【最優先】自作カスタム辞書に登録がある場合はGoogle通信をスキップして上書き適用 ---
-        const dict = getCustomDictionary();
-        if (dict[cleanText]) {
-            popup.innerText = dict[cleanText];
-            setupPopupEditEvent(popup, cleanText);
-            return;
-        }
-
-        try {
-            // ブラウザから直接高速に叩ける無料エンドポイントで単語の読み（ひらがな/カタカナ）を取得
-            const res = await fetch(`https://googleapis.com{encodeURIComponent(cleanText)}`);
-            const data = await res.json();
-            
-            if (data && data[0] && data[0][0] && data[0][0][0]) {
-                // 返却されたテキスト（読みが混ざる場合があります）を表示
-                popup.innerText = data[0][0][0];
-            } else {
-                popup.innerText = cleanText; // 取得できなかった場合は元の文字をフォールバック表示
-            }
-        } catch (err) {
-            // 通信エラー時も、自作辞書を育てるために元の文字を表示して編集可能にする
-            popup.innerText = cleanText; 
-            console.error("外部ルビ振り通信エラー（自作辞書機能は有効です）:", err);
-        }
-
-        setupPopupEditEvent(popup, cleanText);
-    }
-
-    // ポップアップを「長押し」または「ダブルクリック」したときに自作辞書に上書き保存させる処理
-    function setupPopupEditEvent(popup, originalText) {
-        const editTrigger = () => {
-            const currentRuby = popup.innerText;
-            const newRuby = prompt(`「${originalText}」の正しい読み方を辞書登録（補正）しますか？`, currentRuby);
-            if (newRuby !== null) {
-                const trimmed = newRuby.trim();
-                const dict = getCustomDictionary();
-                
-                if (trimmed === "" || trimmed === originalText) {
-                    delete dict[originalText]; // 空欄か元の文字なら辞書から削除
-                    alert("辞書登録を解除しました。");
-                    popup.innerText = originalText;
-                } else {
-                    dict[originalText] = trimmed; // 新しい読み方を辞書に登録
-                    alert(`辞書に登録しました：\n${originalText} ➔ ${trimmed}`);
-                    popup.innerText = trimmed;
-                }
-                saveCustomDictionary(dict);
-            }
-        };
-
-        // スマホ用：長押し（コンテキストメニューを考慮し600msホールドで起動）
-        let pressTimer;
-        popup.addEventListener('touchstart', () => {
-            pressTimer = setTimeout(editTrigger, 600);
-        });
-        popup.addEventListener('touchend', () => clearTimeout(pressTimer));
-        
-        // PC・テスト用：ダブルクリック
-        popup.addEventListener('dblclick', editTrigger);
-    }
-
-    // 現在LocalStorageに登録されているカスタム辞書の一覧確認
-    function showDictionaryList() {
-        const dict = getCustomDictionary();
-        const keys = Object.keys(dict);
-        if (keys.length === 0) {
-            alert("現在、辞書登録されている単語はありません。\n漢字をタップして、出てきたルビを長押しすると好きな読み方を登録できます。");
-            return;
-        }
-        let msg = "【登録済みカスタム辞書一覧】\n\n";
-        keys.forEach(k => {
-            msg += `・${k} ➔ ${dict[k]}\n`;
-        });
-        alert(msg);
-    }
-
-    // ページ読み込み時にAPIキーの有無を自動チェック
-    window.onload = () => {
-        const key = localStorage.getItem('GOOGLE_VISION_API_KEY');
-        if (!key) {
-            setupGoogleApiKey();
-        }
-    };
+  // ---------- 起動時チェック ----------
+  if (typeof Tesseract === 'undefined' || typeof kuromoji === 'undefined') {
+    el.loadBtn.disabled = true;
+    setError('lib/ フォルダにライブラリがありません。README.md の手順で「node setup.js」を実行してください。');
+  }
+  renderMetrics();
+})();
 </script>
 </body>
 </html>

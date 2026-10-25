@@ -11,7 +11,13 @@
         .view-area { flex: 1; position: relative; width: 100%; background: #111; display: flex; justify-content: center; align-items: center; overflow: hidden; }
         #preview-img { max-width: 100%; max-height: 100%; object-fit: contain; display: none; }
         #ocr-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; display: none; }
-        .kanji-btn { position: absolute; background: rgba(255, 255, 255, 0.01); cursor: pointer; z-index: 10; }
+        .kanji-btn { 
+            position: absolute; 
+            background: rgba(255, 0, 0, 0.2); 
+            border: 1px solid red;
+            cursor: pointer; 
+            z-index: 10; 
+        }
         .ruby-popup { position: absolute; background: #ffeb3b; color: #000; padding: 5px 10px; border-radius: 4px; font-size: 15px; font-weight: bold; transform: translate(-50%, -130%); z-index: 20; box-shadow: 0 2px 8px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap; }
         .guide { position: absolute; bottom: 10px; left: 0; width: 100%; text-align: center; color: #aaa; background: rgba(0,0,0,0.7); padding: 8px; font-size: 13px; z-index: 10; pointer-events: none; }
         .control-panel { height: 90px; background: #000; display: flex; justify-content: center; align-items: center; border-top: 1px solid #222; z-index: 100; }

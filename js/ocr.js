@@ -14,8 +14,23 @@ const OCR = (() => {
   const BASE = new URL('lib/tesseract', document.baseURI).href;
   const KANJI = /[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u3007]/;
 
+  const RECYCLE_EVERY = 3; // 数枚ごとにOCRエンジンを作り直し、メモリを解放する
+
   let worker = null;
   let logCb = null;
+  let runs = 0;
+  let ready = Promise.resolve();
+
+  // OCRエンジンを止めて作り直す（wasmのメモリを手放す）
+  async function recycle() {
+    if (worker) {
+      try { await worker.terminate(); } catch (e) { /* 無視 */ }
+      worker = null;
+    }
+    runs = 0;
+    await init();
+  }
+  const release = async () => { await ready; await recycle(); };
 
   async function init(onLog) {
     if (worker) return;
@@ -30,6 +45,7 @@ const OCR = (() => {
   }
 
   async function recognize(image, opts, onLog) {
+    await ready; // 作り直しの最中なら待つ
     if (!worker) throw new Error('OCRが準備されていません');
     logCb = onLog || null;
     await worker.setParameters({
@@ -39,6 +55,7 @@ const OCR = (() => {
     const target = opts && opts.normalize ? normalize(image) : image;
     const { data } = await worker.recognize(target);
     logCb = null;
+    if (++runs >= RECYCLE_EVERY) ready = recycle().catch((e) => console.warn('OCRの作り直しに失敗', e));
     return toLines(data);
   }
 
@@ -105,5 +122,5 @@ const OCR = (() => {
     return lines;
   }
 
-  return { init, recognize };
+  return { init, recognize, release };
 })();

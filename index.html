@@ -6,139 +6,72 @@
 <title>タップ de ふりがな</title>
 <style>
   :root {
-    --ink: #1c2331;
-    --indigo: #27386b;
-    --indigo-dark: #1a2750;
-    --mist: #eef1f5;
-    --line: #cfd6e0;
-    --paper: #ffffff;
-    --amber: #f2b705;
-    --muted: #5d6879;
-    --danger: #b3261e;
+    --ink: #1c2331; --indigo: #27386b; --indigo-dark: #1a2750; --mist: #eef1f5;
+    --line: #cfd6e0; --paper: #fff; --amber: #f2b705; --muted: #5d6879; --danger: #b3261e;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
   html { -webkit-text-size-adjust: 100%; }
   body {
-    margin: 0;
-    background: var(--mist);
-    color: var(--ink);
+    margin: 0; background: var(--mist); color: var(--ink); line-height: 1.6;
     font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
-    line-height: 1.6;
   }
-  header {
-    background: var(--indigo);
-    color: #fff;
-    padding: 14px 16px;
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-  }
-  header h1 { margin: 0; font-size: 18px; font-weight: 700; letter-spacing: .04em; }
+  header { background: var(--indigo); color: #fff; padding: 14px 16px; display: flex; align-items: baseline; gap: 10px; }
+  header h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
   header span { font-size: 12px; opacity: .75; }
   main { max-width: 720px; margin: 0 auto; padding: 14px 14px 40px; }
-
-  .card {
-    background: var(--paper);
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    padding: 14px;
-    margin-bottom: 12px;
-  }
+  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 14px; margin-bottom: 12px; }
+  h2 { margin: 0 0 8px; font-size: 15px; }
   .btn {
-    appearance: none;
-    border: 1px solid var(--indigo);
-    background: var(--paper);
-    color: var(--indigo);
-    font: inherit;
-    font-weight: 700;
-    min-height: 48px;
-    padding: 0 18px;
-    border-radius: 8px;
-    cursor: pointer;
-    width: 100%;
+    appearance: none; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo);
+    font: inherit; font-weight: 700; min-height: 48px; padding: 0 18px; border-radius: 8px; cursor: pointer; width: 100%;
   }
   .btn.primary { background: var(--indigo); color: #fff; }
   .btn:active:not(:disabled) { background: var(--indigo-dark); color: #fff; }
   .btn:disabled { opacity: .4; cursor: default; }
-  .btn:focus-visible, select:focus-visible, summary:focus-visible {
-    outline: 3px solid var(--amber);
-    outline-offset: 2px;
+  .btn.small { min-height: 40px; font-size: 14px; }
+  .btn:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, .opt:focus-visible {
+    outline: 3px solid var(--amber); outline-offset: 2px;
   }
-
   .bar { height: 8px; background: var(--mist); border-radius: 4px; overflow: hidden; margin: 12px 0 8px; }
   #barFill { height: 100%; width: 0; background: var(--indigo); transition: width .25s; }
-  .bar.pulse #barFill { animation: pulse 1.2s ease-in-out infinite; }
-  @keyframes pulse { 50% { opacity: .35; } }
-  @media (prefers-reduced-motion: reduce) { .bar.pulse #barFill { animation: none; } }
-
   .msg { margin: 0; font-size: 14px; color: var(--muted); }
   .msg.error { color: var(--danger); font-weight: 700; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
-  #status { min-height: 22px; margin-bottom: 8px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  select, input[type="search"] {
+    font: inherit; width: 100%; min-height: 46px; border: 1px solid var(--line); border-radius: 8px;
+    padding: 0 10px; background: #fff; color: var(--ink);
+  }
+  label.lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  #thumb { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
 
-  .stage {
-    position: relative;
-    width: 100%;
-    line-height: 0;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    overflow: hidden;
-    touch-action: manipulation;
+  .list { display: grid; gap: 8px; margin-top: 10px; max-height: 52vh; overflow-y: auto; }
+  .opt {
+    appearance: none; text-align: left; font: inherit; cursor: pointer; width: 100%;
+    background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    display: grid; gap: 0; color: var(--ink); line-height: 1.35;
   }
-  .stage canvas { display: block; width: 100%; height: auto; }
-  #overlay { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .opt .rd { font-size: 12px; color: var(--muted); }
+  .opt .kj { font-size: 20px; font-weight: 700; }
+  .opt.best { border: 2px solid var(--amber); background: #fffbea; }
+  .opt:active { background: var(--mist); }
+  .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 
-  .popup {
-    position: absolute;
-    z-index: 5;
-    max-width: 92%;
-    padding: 8px 14px 10px;
-    background: var(--indigo-dark);
-    color: #fff;
-    border-radius: 8px;
-    text-align: center;
-    line-height: 1.3;
-    pointer-events: none;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, .28);
-  }
-  .popup::after {
-    content: "";
-    position: absolute;
-    left: var(--ax, 50%);
-    top: 100%;
-    margin-left: -7px;
-    border: 7px solid transparent;
-    border-top-color: var(--indigo-dark);
-  }
-  .popup.below::after {
-    top: auto;
-    bottom: 100%;
-    border-top-color: transparent;
-    border-bottom-color: var(--indigo-dark);
-  }
-  .p-surface { font-size: 13px; opacity: .72; }
-  .p-reading { font-size: 22px; font-weight: 700; letter-spacing: .06em; }
-  .p-none { font-size: 14px; font-weight: 400; letter-spacing: 0; }
-  .p-conf { font-size: 11px; opacity: .6; margin-top: 4px; letter-spacing: 0; }
-  .p-warn { font-size: 12px; color: #ffd166; margin-top: 4px; letter-spacing: 0; }
-
-  .hint { font-size: 13px; color: var(--muted); margin: 8px 2px 0; }
+  .result { border: 2px solid var(--indigo); }
+  .rubies { font-size: 26px; font-weight: 700; line-height: 2.2; }
+  .rubies ruby { margin-right: .5em; }
+  .rubies rt { font-size: 12px; font-weight: 400; color: var(--indigo); }
+  .reading { font-size: 22px; font-weight: 700; margin: 6px 0 12px; letter-spacing: .04em; word-break: break-all; }
 
   details.debug { margin-top: 18px; }
   details.debug summary { cursor: pointer; font-size: 14px; color: var(--muted); }
   .opts { display: grid; gap: 10px; margin: 12px 0; font-size: 14px; }
   .opts label { display: grid; gap: 4px; }
-  .opts select {
-    font: inherit; min-height: 42px; border: 1px solid var(--line); border-radius: 6px;
-    padding: 0 8px; background: #fff; color: var(--ink);
-  }
   .opts .check { display: flex; align-items: center; gap: 8px; }
   .opts .check input { width: 20px; height: 20px; }
   #metrics {
-    margin: 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line);
-    border-radius: 6px; font-size: 13px; line-height: 1.7; white-space: pre-wrap;
+    margin: 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px;
+    font-size: 13px; line-height: 1.7; white-space: pre-wrap;
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   }
 </style>
@@ -146,110 +79,127 @@
 <body>
 <header>
   <h1>タップ de ふりがな</h1>
-  <span>Ver.1 テスト版</span>
+  <span>住所の読み Ver.1 テスト版</span>
 </header>
 
 <main>
   <section class="card">
     <button id="loadBtn" class="btn primary" type="button">データ取得</button>
-    <div class="bar" id="bar"><div id="barFill"></div></div>
-    <p class="msg" id="loadMsg">最初に「データ取得」を押してください。初回だけ時間がかかります。</p>
+    <div class="bar"><div id="barFill"></div></div>
+    <p class="msg" id="loadMsg">最初に「データ取得」を押してください。</p>
   </section>
 
-  <div class="row">
-    <button id="camBtn" class="btn" type="button" disabled>撮影する</button>
-    <button id="galBtn" class="btn" type="button" disabled>ギャラリーから選ぶ</button>
-  </div>
-  <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
-  <input id="galIn" type="file" accept="image/*" hidden>
+  <section class="card">
+    <label class="lbl" for="pref">都道府県（分かっていれば先に選ぶ）</label>
+    <select id="pref" disabled><option value="">データ取得のあとに選べます</option></select>
+    <div class="row">
+      <button id="camBtn" class="btn" type="button" disabled>撮影する</button>
+      <button id="galBtn" class="btn" type="button" disabled>ギャラリーから選ぶ</button>
+    </div>
+    <input id="camIn" type="file" accept="image/*" capture="environment" hidden>
+    <input id="galIn" type="file" accept="image/*" hidden>
+    <p class="msg" id="status" style="margin-top:10px"></p>
+  </section>
 
-  <p class="msg" id="status"></p>
+  <section class="card" id="photoCard" hidden>
+    <canvas id="thumb" width="1" height="1"></canvas>
+    <p class="msg" id="ocrText"></p>
+  </section>
 
-  <div class="stage" id="stage" hidden>
-    <canvas id="base"></canvas>
-    <canvas id="overlay"></canvas>
-    <div class="popup" id="popup" hidden></div>
-  </div>
-  <p class="hint" id="hint" hidden>読みを知りたい漢字をタップしてください。</p>
+  <section class="card" id="cityCard" hidden>
+    <h2>① 市区町村を選ぶ</h2>
+    <input id="cityQ" type="search" placeholder="絞り込み（漢字またはひらがな）">
+    <div class="list" id="cityList"></div>
+  </section>
+
+  <section class="card" id="townCard" hidden>
+    <h2 id="townHead">② 町域を選ぶ</h2>
+    <input id="townQ" type="search" placeholder="絞り込み（漢字またはひらがな）">
+    <div class="list" id="townList"></div>
+    <p class="note">黄色の枠は、写真の文字にいちばん近い候補です。</p>
+    <button id="skipTown" class="btn small" type="button" style="margin-top:10px">町域は選ばずに確定する</button>
+  </section>
+
+  <section class="card result" id="result" hidden>
+    <h2>読み</h2>
+    <div class="rubies" id="rubies"></div>
+    <div class="reading" id="reading"></div>
+    <div class="row" style="margin-top:0">
+      <button id="copyBtn" class="btn small" type="button">読みをコピー</button>
+      <button id="nextBtn" class="btn primary small" type="button">次の住所へ</button>
+    </div>
+  </section>
 
   <details class="debug">
     <summary>計測と設定</summary>
     <div class="opts">
-      <label>認識モード
-        <select id="psm">
-          <option value="6" selected>単一ブロック（書類向け・推奨）</option>
-          <option value="3">自動レイアウト（段組みが多い場合）</option>
-          <option value="4">1列・文字サイズが混在</option>
-        </select>
-      </label>
       <label>画像サイズの上限（長辺）
         <select id="maxSide">
-          <option value="1200">1200px（速い）</option>
-          <option value="1600" selected>1600px</option>
-          <option value="2000">2000px（精度重視）</option>
+          <option value="800">800px（軽い）</option>
+          <option value="1000">1000px</option>
+          <option value="1200" selected>1200px</option>
+          <option value="1600">1600px</option>
         </select>
       </label>
-      <label class="check"><input type="checkbox" id="showBoxes" checked>タップできる漢字に枠を表示</label>
-      <label class="check"><input type="checkbox" id="normalize" checked>影や明るさのムラを補正して認識（実験）</label>
+      <label>認識モード
+        <select id="psm">
+          <option value="6" selected>単一ブロック（1〜2行向け・推奨）</option>
+          <option value="7">1行のみ</option>
+          <option value="3">自動レイアウト</option>
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" id="normalize" checked>影や明るさのムラを補正して認識</label>
     </div>
-    <pre id="metrics"></pre>
+    <button id="cleanBtn" class="btn small" type="button" disabled>メモリを整理する</button>
+    <pre id="metrics" style="margin-top:12px"></pre>
   </details>
 </main>
 
-<!-- ライブラリは lib/ に自前で同梱（外部通信なし）。入手方法は README.md を参照 -->
 <script src="lib/tesseract/tesseract.min.js"></script>
-<script src="lib/kuromoji/kuromoji.js"></script>
-<script src="js/userdict.js"></script>
-<script src="js/corrections.js"></script>
 <script src="js/ocr.js"></script>
-<script src="js/furigana.js"></script>
+<script src="js/address.js"></script>
 
 <script>
 (() => {
   'use strict';
   const $ = (id) => document.getElementById(id);
   const el = {
-    loadBtn: $('loadBtn'), bar: $('bar'), barFill: $('barFill'), loadMsg: $('loadMsg'),
-    camBtn: $('camBtn'), galBtn: $('galBtn'), camIn: $('camIn'), galIn: $('galIn'),
-    status: $('status'), stage: $('stage'), base: $('base'), overlay: $('overlay'),
-    popup: $('popup'), hint: $('hint'),
-    psm: $('psm'), maxSide: $('maxSide'), showBoxes: $('showBoxes'), normalize: $('normalize'), metrics: $('metrics'),
+    loadBtn: $('loadBtn'), barFill: $('barFill'), loadMsg: $('loadMsg'), pref: $('pref'),
+    camBtn: $('camBtn'), galBtn: $('galBtn'), camIn: $('camIn'), galIn: $('galIn'), status: $('status'),
+    photoCard: $('photoCard'), thumb: $('thumb'), ocrText: $('ocrText'),
+    cityCard: $('cityCard'), cityQ: $('cityQ'), cityList: $('cityList'),
+    townCard: $('townCard'), townHead: $('townHead'), townQ: $('townQ'), townList: $('townList'), skipTown: $('skipTown'),
+    result: $('result'), rubies: $('rubies'), reading: $('reading'), copyBtn: $('copyBtn'), nextBtn: $('nextBtn'),
+    maxSide: $('maxSide'), psm: $('psm'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
-  const state = { ready: false, busy: false, lines: [], highlight: null };
-  const LOW_CONF = 70; // OCRの確信度がこれ未満の漢字は「自信なし」として示す
-  const metrics = { ocrInit: null, dictLoad: null, image: null, ocr: null, kanji: null, low: null, tapLookup: null, tapTotal: null };
-
+  const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {} };
+  const metrics = { ocrInit: null, image: null, ocr: null, photos: 0 };
   const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
   // ---------- 表示まわり ----------
-  function setProgress(frac, msg, pulse) {
+  function setProgress(frac, msg) {
     el.barFill.style.width = Math.round(frac * 100) + '%';
-    el.bar.classList.toggle('pulse', !!pulse);
     if (msg) { el.loadMsg.textContent = msg; el.loadMsg.classList.remove('error'); }
   }
-  function setError(msg) { el.loadMsg.textContent = msg; el.loadMsg.classList.add('error'); }
-  function setStatus(msg, isError) {
-    el.status.textContent = msg || '';
-    el.status.classList.toggle('error', !!isError);
-  }
+  function setStatus(msg, isError) { el.status.textContent = msg || ''; el.status.classList.toggle('error', !!isError); }
   function setBusy(b) {
-    state.busy = b;
-    el.camBtn.disabled = el.galBtn.disabled = b || !state.ready;
+    S.busy = b;
+    el.camBtn.disabled = el.galBtn.disabled = b || !S.ready;
+    el.cleanBtn.disabled = b || !S.ready;
   }
   function renderMetrics() {
-    const f = (v) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + ' 秒' : v.toFixed(1) + ' ms');
+    const f = (v) => (v == null ? '—' : v >= 1000 ? (v / 1000).toFixed(1) + ' 秒' : v.toFixed(0) + ' ms');
+    const heap = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) + ' MB' : '（この端末では取得不可）';
     el.metrics.textContent = [
-      'OCRエンジン準備 : ' + f(metrics.ocrInit),
-      '辞書ロード     : ' + f(metrics.dictLoad),
+      'OCRエンジン準備: ' + f(metrics.ocrInit),
       '画像の読込・縮小: ' + f(metrics.image),
       'OCR処理        : ' + f(metrics.ocr),
-      '検出した漢字   : ' + (metrics.kanji == null ? '—' : metrics.kanji + ' 文字（うち自信なし ' + metrics.low + '）'),
-      'タップ→読み検索: ' + f(metrics.tapLookup),
-      'タップ→表示完了: ' + f(metrics.tapTotal),
+      '撮影した枚数   : ' + metrics.photos,
+      'JSメモリ使用   : ' + heap,
     ].join('\n');
   }
 
-  // ---------- データ取得（OCRエンジン + 辞書を一度だけロード） ----------
+  // ---------- データ取得（OCRエンジン + 都道府県の一覧） ----------
   const OCR_STEPS = ['loading tesseract core', 'initializing tesseract', 'loading language traineddata', 'initializing api'];
   const OCR_LABEL = ['OCRエンジンを読み込み中', 'OCRエンジンを初期化中', '日本語データを読み込み中', 'OCRを準備中'];
 
@@ -261,38 +211,148 @@
       await nextPaint();
       await OCR.init((m) => {
         const i = OCR_STEPS.indexOf(m.status);
-        if (i >= 0) setProgress(0.3 * (i + (m.progress || 0)) / OCR_STEPS.length, OCR_LABEL[i] + '…');
+        if (i >= 0) setProgress(0.9 * (i + (m.progress || 0)) / OCR_STEPS.length, OCR_LABEL[i] + '…');
       });
       metrics.ocrInit = performance.now() - t0;
-
-      const t1 = performance.now();
-      await Furigana.load((p, msg, pulse) => setProgress(0.3 + 0.7 * p, msg, pulse));
-      await UserDict.init();
-      metrics.dictLoad = performance.now() - t1;
-
-      state.ready = true;
+      setProgress(0.95, '住所データを確認中…');
+      S.prefs = await Address.loadIndex();
+      el.pref.textContent = '';
+      el.pref.append(new Option('（都道府県を選ぶ）', ''));
+      for (const p of S.prefs) el.pref.append(new Option(p[1] + '（' + p[2] + '）', p[0]));
+      el.pref.disabled = false;
+      S.ready = true;
       setBusy(false);
-      setProgress(1, '準備ができました。撮影するか、ギャラリーから画像を選んでください。');
+      setProgress(1, '準備ができました。都道府県を選ぶか、住所を撮影してください。');
       el.loadBtn.textContent = 'データ取得済み';
     } catch (e) {
       console.error(e);
-      setProgress(0, null, false);
-      setError('データ取得に失敗しました: ' + (e && e.message ? e.message : e));
+      setProgress(0);
+      el.loadMsg.textContent = 'データ取得に失敗しました: ' + (e && e.message ? e.message : e);
+      el.loadMsg.classList.add('error');
       el.loadBtn.disabled = false;
       el.loadBtn.textContent = 'データ取得をやり直す';
     }
     renderMetrics();
   });
 
-  // ---------- 画像の取り込み ----------
+  // ---------- 都道府県・候補リスト ----------
+  async function setPref(code) {
+    S.prefCode = code; S.city = null; S.town = null; S.more = {};
+    el.cityQ.value = ''; el.townQ.value = '';
+    el.townCard.hidden = true; el.result.hidden = true;
+    if (!code) { S.data = null; el.cityCard.hidden = true; return; }
+    try {
+      S.data = await Address.loadPref(code);
+    } catch (e) { setStatus(e.message, true); return; }
+    el.cityCard.hidden = false;
+    renderCities();
+  }
+  el.pref.addEventListener('change', () => setPref(el.pref.value));
+
+  // 候補の並べ方: 絞り込み入力があればそれ、写真があれば近い順（上位のみ）、なければ全件
+  function pickRows(all, text, q, more) {
+    if (q.trim()) {
+      const t = q.trim();
+      const hit = all.filter((it) => it[0].includes(t) || it[1].includes(t));
+      return { rows: hit.slice(0, 80).map((item) => ({ item })), hidden: Math.max(0, hit.length - 80) };
+    }
+    if (text) {
+      const r = Address.rank(all, text);
+      const n = more ? 150 : 6;
+      return {
+        rows: r.slice(0, n).map((x, i) => ({ item: x.item, end: x.end, best: i === 0 && x.ratio >= 0.6 })),
+        hidden: Math.max(0, r.length - n),
+      };
+    }
+    return { rows: all.slice(0, 150).map((item) => ({ item })), hidden: Math.max(0, all.length - 150) };
+  }
+
+  function renderRows(box, kind, res, onPick, rerender) {
+    box.textContent = '';
+    for (const row of res.rows) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'opt' + (row.best ? ' best' : '');
+      const rd = document.createElement('span'); rd.className = 'rd'; rd.textContent = row.item[1] || '（読みなし）';
+      const kj = document.createElement('span'); kj.className = 'kj'; kj.textContent = row.item[0];
+      b.append(rd, kj);
+      b.addEventListener('click', () => onPick(row));
+      box.append(b);
+    }
+    if (res.hidden > 0) {
+      const m = document.createElement('button');
+      m.type = 'button'; m.className = 'btn small';
+      m.textContent = S.more[kind] ? '他 ' + res.hidden + ' 件。入力で絞り込んでください' : 'ほかの候補を見る（残り ' + res.hidden + ' 件）';
+      m.disabled = !!S.more[kind];
+      m.addEventListener('click', () => { S.more[kind] = true; rerender(); });
+      box.append(m);
+    }
+  }
+
+  function renderCities() {
+    renderRows(el.cityList, 'city', pickRows(S.data.c, S.text, el.cityQ.value, S.more.city), chooseCity, renderCities);
+  }
+  el.cityQ.addEventListener('input', renderCities);
+
+  function chooseCity(row) {
+    S.city = row.item; S.town = null; S.more.town = false; el.townQ.value = '';
+    S.cityEnd = row.end != null ? row.end : (S.text ? Address.rank([row.item], S.text)[0].end : 0);
+    el.townHead.textContent = '② 町域を選ぶ（' + S.city[0] + '）';
+    el.townCard.hidden = false; el.result.hidden = true;
+    renderTowns();
+    el.townCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  function renderTowns() {
+    const rest = S.text.slice(S.cityEnd);
+    const text = rest.length ? rest : S.text;
+    renderRows(el.townList, 'town', pickRows(S.city[2], text, el.townQ.value, S.more.town), (row) => { S.town = row.item; showResult(); }, renderTowns);
+  }
+  el.townQ.addEventListener('input', renderTowns);
+  el.skipTown.addEventListener('click', () => { S.town = null; showResult(); });
+
+  // ---------- 結果 ----------
+  function showResult() {
+    const pref = S.prefs.find((p) => p[0] === S.prefCode);
+    const parts = [[pref[1], pref[2]], [S.city[0], S.city[1]]];
+    if (S.town) parts.push([S.town[0], S.town[1]]);
+    el.rubies.textContent = '';
+    for (const [kj, rd] of parts) {
+      const r = document.createElement('ruby');
+      r.append(document.createTextNode(kj));
+      const rt = document.createElement('rt'); rt.textContent = rd;
+      r.append(rt);
+      el.rubies.append(r);
+    }
+    el.reading.textContent = parts.map((p) => p[1]).join(' ');
+    el.result.hidden = false;
+    el.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  el.copyBtn.addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(el.reading.textContent); setStatus('読みをコピーしました。'); }
+    catch (e) { setStatus('コピーできませんでした。読みを長押しして選択してください。', true); }
+  });
+  el.nextBtn.addEventListener('click', () => {
+    S.text = ''; S.city = null; S.town = null; S.more = {};
+    el.thumb.width = el.thumb.height = 1; // 写真を手放す
+    el.photoCard.hidden = true; el.townCard.hidden = true; el.result.hidden = true;
+    el.cityQ.value = ''; el.townQ.value = '';
+    setStatus('');
+    if (S.data) renderCities();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // ---------- 撮影・画像の取り込み ----------
   el.camBtn.addEventListener('click', () => el.camIn.click());
   el.galBtn.addEventListener('click', () => el.galIn.click());
   el.camIn.addEventListener('change', () => handleFile(el.camIn.files[0]));
   el.galIn.addEventListener('change', () => handleFile(el.galIn.files[0]));
 
-  async function loadBitmap(file) {
+  // 読み込み時点で縮小して、元の大きな写真を丸ごとメモリに展開しないようにする
+  async function loadBitmap(file, maxSide) {
     if ('createImageBitmap' in window) {
-      try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { /* 下のImageで読む */ }
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image', resizeWidth: maxSide, resizeQuality: 'medium' }); } catch (e) { /* 次の方法へ */ }
+      try { return await createImageBitmap(file, { imageOrientation: 'from-image' }); } catch (e) { /* 次の方法へ */ }
     }
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -304,210 +364,84 @@
   }
 
   async function handleFile(file) {
-    if (!file || state.busy) return;
+    if (!file || S.busy) return;
     setBusy(true);
-    hidePopup();
-    state.highlight = null;
-    state.lines = [];
+    el.thumb.width = el.thumb.height = 1; // 前の写真を先に手放す
+    S.text = ''; S.city = null; S.town = null; S.more = {};
+    el.townCard.hidden = true; el.result.hidden = true; el.cityQ.value = '';
+    let work = null;
     try {
       setStatus('画像を読み込み中…');
       await nextPaint();
       const tImg = performance.now();
-      const bmp = await loadBitmap(file);
       const maxSide = parseInt(el.maxSide.value, 10);
+      const bmp = await loadBitmap(file, maxSide);
       const scale = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
-      const w = Math.round(bmp.width * scale);
-      const h = Math.round(bmp.height * scale);
-      el.base.width = el.overlay.width = w;
-      el.base.height = el.overlay.height = h;
-      el.base.getContext('2d').drawImage(bmp, 0, 0, w, h);
+      const w = Math.max(1, Math.round(bmp.width * scale));
+      const h = Math.max(1, Math.round(bmp.height * scale));
+      work = document.createElement('canvas');
+      work.width = w; work.height = h;
+      work.getContext('2d').drawImage(bmp, 0, 0, w, h);
       if (bmp.close) bmp.close();
+      const tw = Math.min(w, 600);
+      el.thumb.width = tw; el.thumb.height = Math.round(h * tw / w);
+      el.thumb.getContext('2d').drawImage(work, 0, 0, el.thumb.width, el.thumb.height);
+      el.photoCard.hidden = false;
       metrics.image = performance.now() - tImg;
-      el.stage.hidden = false;
-      el.hint.hidden = true;
-      drawOverlay();
 
       setStatus('文字を解析中… 0%');
       await nextPaint();
       const tOcr = performance.now();
-      const lines = await OCR.recognize(el.base, { psm: el.psm.value, normalize: el.normalize.checked }, (m) => {
+      const lines = await OCR.recognize(work, { psm: el.psm.value, normalize: el.normalize.checked }, (m) => {
         if (m.status === 'recognizing text') setStatus('文字を解析中… ' + Math.round((m.progress || 0) * 100) + '%');
       });
       metrics.ocr = performance.now() - tOcr;
+      metrics.photos++;
 
-      state.lines = lines;
-      let kanji = 0;
-      let low = 0;
-      for (const ln of lines) {
-        for (const c of ln.chars) {
-          if (!c.isKanji) continue;
-          kanji++;
-          if (c.conf < LOW_CONF) low++;
-        }
+      const raw = lines.map((l) => l.text).join('');
+      S.text = Address.normalizeText(raw);
+      el.ocrText.textContent = S.text ? '読み取った文字: ' + raw : '文字を読み取れませんでした。住所だけが大きく写るように撮り直してください。';
+      if (!S.text) { setStatus(''); return; }
+
+      if (!S.prefCode) {
+        const code = Address.detectPref(S.prefs, S.text);
+        if (code) { el.pref.value = code; await setPref(code); }
       }
-      metrics.kanji = kanji;
-      metrics.low = low;
-      if (kanji > 0) {
-        setStatus('解析が終わりました。漢字を ' + kanji + ' 文字見つけました。' +
-          (low ? '橙色の破線枠の ' + low + ' 文字は、読み取りに自信がありません。' : ''));
-        el.hint.hidden = false;
+      if (!S.prefCode) {
+        setStatus('都道府県を読み取れませんでした。上の欄で都道府県を選んでください。', true);
       } else {
-        setStatus('漢字を見つけられませんでした。明るい場所で、文字が横一列になるように撮り直してください。', true);
+        setStatus('候補を出しました。黄色の枠が、写真の文字にいちばん近い候補です。');
+        el.cityCard.hidden = false;
+        renderCities();
+        el.cityCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
-      drawOverlay();
     } catch (e) {
       console.error(e);
-      setStatus('画像の処理に失敗しました: ' + (e && e.message ? e.message : e), true);
+      setStatus('処理に失敗しました（メモリ不足の可能性があります）。自動で整理しています。もう一度試してください。', true);
+      OCR.release().catch(() => {});
     } finally {
-      el.camIn.value = '';
-      el.galIn.value = '';
+      if (work) { work.width = work.height = 0; } // 作業用の画像を手放す
+      el.camIn.value = ''; el.galIn.value = '';
       setBusy(false);
       renderMetrics();
     }
   }
 
-  // ---------- 描画（タップできる漢字の枠 / 選択中の単語） ----------
-  function drawOverlay() {
-    const c = el.overlay;
-    const g = c.getContext('2d');
-    g.clearRect(0, 0, c.width, c.height);
-    const lw = Math.max(1.5, c.width / 500);
-    if (el.showBoxes.checked) {
-      g.lineWidth = lw;
-      for (const ln of state.lines) {
-        for (const ch of ln.chars) {
-          if (!ch.isKanji) continue;
-          const b = ch.bbox;
-          const weak = ch.conf < LOW_CONF;
-          g.strokeStyle = weak ? 'rgba(214, 90, 20, .9)' : 'rgba(39, 56, 107, .45)';
-          g.setLineDash(weak ? [lw * 2, lw * 1.5] : []);
-          g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-        }
-      }
-      g.setLineDash([]);
-    }
-    if (state.highlight) {
-      const b = state.highlight;
-      g.fillStyle = 'rgba(242, 183, 5, .38)';
-      g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-      g.lineWidth = lw * 1.5;
-      g.strokeStyle = 'rgba(200, 140, 0, .95)';
-      g.strokeRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
-    }
-  }
-  el.showBoxes.addEventListener('change', drawOverlay);
-
-  // ---------- タップ判定 ----------
-  // 画像座標(x, y)に最も近い文字を返す。遠すぎる場合は null
-  function hitTest(x, y) {
-    let best = null;
-    let bestD = Infinity;
-    for (const ln of state.lines) {
-      const lb = ln.bbox || ln.chars[0].bbox;
-      const pad = Math.max(8, (lb.y1 - lb.y0) * 0.4);
-      if (x < lb.x0 - pad || x > lb.x1 + pad || y < lb.y0 - pad || y > lb.y1 + pad) continue;
-      for (const ch of ln.chars) {
-        const b = ch.bbox;
-        const size = Math.max(b.x1 - b.x0, b.y1 - b.y0);
-        const d = Math.hypot(x - (b.x0 + b.x1) / 2, y - (b.y0 + b.y1) / 2);
-        if (d <= size * 0.8 && d < bestD) { best = { line: ln, char: ch }; bestD = d; }
-      }
-    }
-    return best;
-  }
-
-  el.stage.addEventListener('click', (ev) => {
-    if (!state.lines.length) return;
-    const t0 = performance.now();
-    const rect = el.base.getBoundingClientRect();
-    const x = (ev.clientX - rect.left) * el.base.width / rect.width;
-    const y = (ev.clientY - rect.top) * el.base.height / rect.height;
-    const hit = hitTest(x, y);
-    if (!hit || !hit.char.isKanji) {
-      hidePopup();
-      state.highlight = null;
-      drawOverlay();
-      return;
-    }
-    const t1 = performance.now();
-    const info = Furigana.lookup(hit.line.text, hit.char.start);
-    const t2 = performance.now();
-
-    // 読みの対象になった単語の範囲を黄色で示す
-    let range = hit.char.bbox;
-    if (info) {
-      const members = hit.line.chars.filter((c) => c.start >= info.start && c.start < info.end);
-      if (members.length) {
-        range = {
-          x0: Math.min(...members.map((c) => c.bbox.x0)), y0: Math.min(...members.map((c) => c.bbox.y0)),
-          x1: Math.max(...members.map((c) => c.bbox.x1)), y1: Math.max(...members.map((c) => c.bbox.y1)),
-        };
-      }
-    }
-    state.highlight = range;
-    drawOverlay();
-    showPopup(hit, info, range);
-
-    metrics.tapLookup = t2 - t1;
-    metrics.tapTotal = performance.now() - t0;
+  // ---------- メモリを整理 ----------
+  el.cleanBtn.addEventListener('click', async () => {
+    setBusy(true);
+    setStatus('メモリを整理中…');
+    el.thumb.width = el.thumb.height = 1;
+    try { await OCR.release(); setStatus('メモリを整理しました。'); }
+    catch (e) { setStatus('整理に失敗しました。ページを再読み込みしてください。', true); }
+    setBusy(false);
     renderMetrics();
   });
 
-  // ---------- ポップアップ ----------
-  function hidePopup() { el.popup.hidden = true; }
-
-  function showPopup(hit, info, range) {
-    const p = el.popup;
-    p.textContent = '';
-    const s = document.createElement('div');
-    s.className = 'p-surface';
-    s.textContent = info ? info.surface : hit.char.ch;
-    const r = document.createElement('div');
-    r.className = 'p-reading';
-    if (info && info.reading) {
-      r.textContent = info.reading;
-    } else {
-      r.textContent = '読みを取得できません';
-      r.classList.add('p-none');
-    }
-    p.append(s, r);
-    // 上段の文字は「OCRが読み取った文字」。確信度も併せて示し、読み違いを見分けやすくする
-    const conf = document.createElement('div');
-    conf.className = 'p-conf';
-    conf.textContent = 'OCR確信度 ' + Math.round(hit.char.conf);
-    p.append(conf);
-    if (hit.char.conf < LOW_CONF) {
-      const w = document.createElement('div');
-      w.className = 'p-warn';
-      w.textContent = 'この文字は読み取りに自信がありません';
-      p.append(w);
-    }
-    p.hidden = false;
-
-    const stageW = el.stage.clientWidth;
-    const stageH = el.stage.clientHeight;
-    const sx = stageW / el.base.width;
-    const sy = stageH / el.base.height;
-    const cx = (range.x0 + range.x1) / 2 * sx;
-    const top = range.y0 * sy;
-    const bottom = range.y1 * sy;
-    const pw = p.offsetWidth;
-    const ph = p.offsetHeight;
-    const gap = 10;
-
-    const centerX = Math.min(Math.max(cx, pw / 2 + 4), stageW - pw / 2 - 4);
-    const below = top - ph - gap < 0;
-    p.style.left = (centerX - pw / 2) + 'px';
-    p.style.top = (below ? bottom + gap : top - ph - gap) + 'px';
-    p.classList.toggle('below', below);
-    const arrowX = Math.min(Math.max(cx - (centerX - pw / 2), 14), pw - 14);
-    p.style.setProperty('--ax', arrowX + 'px');
-  }
-
-  // ---------- 起動時チェック ----------
-  if (typeof Tesseract === 'undefined' || typeof kuromoji === 'undefined') {
+  if (typeof Tesseract === 'undefined') {
     el.loadBtn.disabled = true;
-    setError('lib/ フォルダにライブラリがありません。README.md の手順で「node setup.js」を実行してください。');
+    el.loadMsg.textContent = 'lib/ フォルダにライブラリがありません。README.md の手順を確認してください。';
+    el.loadMsg.classList.add('error');
   }
   renderMetrics();
 })();

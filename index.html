@@ -6,8 +6,14 @@
 <title>タップ de ふりがな</title>
 <style>
   :root {
-    --ink: #1c2331; --indigo: #27386b; --indigo-dark: #1a2750; --mist: #eef1f5;
+    color-scheme: light;
+    --ink: #1c2331; --indigo: #27386b; --indigo-dark: #1a2750; --mist: #eef1f5; --brand: #27386b; --best-bg: #fffbea;
     --line: #cfd6e0; --paper: #fff; --amber: #f2b705; --muted: #5d6879; --danger: #b3261e;
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ink: #e8ecf4; --indigo: #a9bdff; --indigo-dark: #2a3f86; --mist: #0e1424; --brand: #2c409a; --best-bg: #3b3413;
+    --line: #33405e; --paper: #182036; --muted: #9fabc2; --danger: #ff8a80;
   }
   * { box-sizing: border-box; }
   [hidden] { display: none !important; }
@@ -16,15 +22,17 @@
     margin: 0; background: var(--mist); color: var(--ink); line-height: 1.6;
     font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic", "Meiryo", system-ui, sans-serif;
   }
-  header { background: var(--indigo); color: #fff; padding: 12px 16px; }
+  header { background: var(--brand); color: #fff; padding: 12px 16px; }
   .hd-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
   header h1 { margin: 0; font-size: 18px; letter-spacing: .04em; }
   .hd-top span { font-size: 12px; opacity: .75; }
+  .hd-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
   .hist-btn {
-    appearance: none; margin-top: 8px; min-height: 40px; padding: 0 16px; border-radius: 20px; cursor: pointer;
+    appearance: none; min-height: 40px; padding: 0 16px; border-radius: 20px; cursor: pointer;
     border: 1px solid rgba(255, 255, 255, .7); background: transparent; color: #fff; font: inherit; font-size: 14px;
   }
   .hist-btn:active { background: rgba(255, 255, 255, .18); }
+  .hist-btn.icon { padding: 0 12px; min-width: 44px; font-size: 16px; }
   .hist-btn b { background: var(--amber); color: var(--ink); border-radius: 10px; padding: 0 8px; margin-left: 6px; font-size: 12px; }
   .hist-btn:focus-visible, .dr-close:focus-visible { outline: 3px solid var(--amber); outline-offset: 2px; }
 
@@ -35,12 +43,12 @@
   .scrim.on { opacity: 1; visibility: visible; transition: opacity .25s; }
   .drawer {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 21; width: min(88vw, 380px);
-    background: #fff; display: flex; flex-direction: column; box-shadow: -4px 0 18px rgba(0, 0, 0, .25);
+    background: var(--paper); color: var(--ink); display: flex; flex-direction: column; box-shadow: -4px 0 18px rgba(0, 0, 0, .25);
     transform: translateX(100%); visibility: hidden; transition: transform .28s ease, visibility 0s .28s;
   }
   .drawer.on { transform: none; visibility: visible; transition: transform .28s ease; }
   @media (prefers-reduced-motion: reduce) { .drawer, .scrim { transition: none; } }
-  .dr-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--indigo); color: #fff; }
+  .dr-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: var(--brand); color: #fff; }
   .dr-head h2 { margin: 0; font-size: 16px; }
   .dr-close {
     appearance: none; background: transparent; color: #fff; font: inherit; font-size: 14px; cursor: pointer;
@@ -61,7 +69,7 @@
     appearance: none; border: 1px solid var(--indigo); background: var(--paper); color: var(--indigo);
     font: inherit; font-weight: 700; min-height: 48px; padding: 0 18px; border-radius: 8px; cursor: pointer; width: 100%;
   }
-  .btn.primary { background: var(--indigo); color: #fff; }
+  .btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
   .btn:active:not(:disabled) { background: var(--indigo-dark); color: #fff; }
   .btn:disabled { opacity: .4; cursor: default; }
   .btn.small { min-height: 40px; font-size: 14px; }
@@ -75,7 +83,7 @@
   .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
   select, input[type="search"] {
     font: inherit; width: 100%; min-height: 46px; border: 1px solid var(--line); border-radius: 8px;
-    padding: 0 10px; background: #fff; color: var(--ink);
+    padding: 0 10px; background: var(--paper); color: var(--ink);
   }
   label.lbl { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   #thumb { display: block; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; margin-bottom: 8px; }
@@ -83,12 +91,12 @@
   .list { display: grid; gap: 8px; margin-top: 10px; max-height: 52vh; overflow-y: auto; }
   .opt {
     appearance: none; text-align: left; font: inherit; cursor: pointer; width: 100%;
-    background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+    background: var(--paper); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
     display: grid; gap: 0; color: var(--ink); line-height: 1.35;
   }
   .opt .rd { font-size: 12px; color: var(--muted); }
   .opt .kj { font-size: 20px; font-weight: 700; }
-  .opt.best { border: 2px solid var(--amber); background: #fffbea; }
+  .opt.best { border: 2px solid var(--amber); background: var(--best-bg); }
   .opt:active { background: var(--mist); }
   .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
 
@@ -105,11 +113,20 @@
   .opts .check { display: flex; align-items: center; gap: 8px; }
   .opts .check input { width: 20px; height: 20px; }
   #metrics {
-    margin: 0; padding: 10px 12px; background: #fff; border: 1px solid var(--line); border-radius: 6px;
+    margin: 0; padding: 10px 12px; background: var(--paper); color: var(--ink); border: 1px solid var(--line); border-radius: 6px;
     font-size: 13px; line-height: 1.7; white-space: pre-wrap;
     font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   }
 </style>
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('tapdefurigana.theme');
+    if (!t) t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (e) { /* 既定のライトモード */ }
+})();
+</script>
 </head>
 <body>
 <header>
@@ -118,7 +135,10 @@
     <span>住所の読み Ver.1 テスト版</span>
     <span id="readyMark" hidden>・準備OK</span>
   </div>
-  <button id="histBtn" class="hist-btn" type="button" aria-haspopup="dialog" aria-controls="drawer">履歴<b id="histCount">0</b></button>
+  <div class="hd-actions">
+    <button id="themeBtn" class="hist-btn icon" type="button" aria-label="ダークモードに切り替え"><span id="themeIcon" aria-hidden="true">🌙</span></button>
+    <button id="histBtn" class="hist-btn" type="button" aria-haspopup="dialog" aria-controls="drawer">履歴<b id="histCount">0</b></button>
+  </div>
 </header>
 
 <main>
@@ -219,7 +239,7 @@
     townCard: $('townCard'), townHead: $('townHead'), townQ: $('townQ'), townList: $('townList'), skipTown: $('skipTown'),
     result: $('result'), rubies: $('rubies'), reading: $('reading'), nextBtn: $('nextBtn'),
     loadCard: $('loadCard'), prefCard: $('prefCard'), photoMsg: $('photoMsg'), readyMark: $('readyMark'),
-    histBtn: $('histBtn'), histCount: $('histCount'), scrim: $('scrim'), drawer: $('drawer'),
+    themeBtn: $('themeBtn'), themeIcon: $('themeIcon'), histBtn: $('histBtn'), histCount: $('histCount'), scrim: $('scrim'), drawer: $('drawer'),
     drawerClose: $('drawerClose'), histList: $('histList'), histClear: $('histClear'),
     maxSide: $('maxSide'), psm: $('psm'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
@@ -310,14 +330,14 @@
   });
 
   // 候補の並べ方: 絞り込み入力があればそれ、写真があれば近い順（上位のみ）、なければ全件
-  function pickRows(all, text, q, more) {
+  function pickRows(all, text, q, more, anchored) {
     if (q.trim()) {
       const t = q.trim();
       const hit = all.filter((it) => it[0].includes(t) || it[1].includes(t));
       return { rows: hit.slice(0, 80).map((item) => ({ item })), hidden: Math.max(0, hit.length - 80) };
     }
     if (text) {
-      const r = Address.rank(all, text);
+      const r = Address.rank(all, text, { anchored });
       const n = more ? 150 : 6;
       return {
         rows: r.slice(0, n).map((x, i) => ({ item: x.item, end: x.end, best: i === 0 && x.ratio >= 0.6 })),
@@ -327,7 +347,8 @@
     return { rows: all.slice(0, 150).map((item) => ({ item })), hidden: Math.max(0, all.length - 150) };
   }
 
-  function renderRows(box, kind, res, onPick, rerender) {
+  function renderRows(box, kind, res, onPick, rerender, keep) {
+    const prev = box.scrollTop;
     box.textContent = '';
     for (const row of res.rows) {
       const b = document.createElement('button');
@@ -344,15 +365,16 @@
       m.type = 'button'; m.className = 'btn small';
       m.textContent = S.more[kind] ? '他 ' + res.hidden + ' 件。入力で絞り込んでください' : 'ほかの候補を見る（残り ' + res.hidden + ' 件）';
       m.disabled = !!S.more[kind];
-      m.addEventListener('click', () => { S.more[kind] = true; rerender(); });
+      m.addEventListener('click', () => { S.more[kind] = true; rerender(true); });
       box.append(m);
     }
+    box.scrollTop = keep ? prev : 0;
   }
 
-  function renderCities() {
-    renderRows(el.cityList, 'city', pickRows(S.data.c, S.text, el.cityQ.value, S.more.city), chooseCity, renderCities);
+  function renderCities(keep) {
+    renderRows(el.cityList, 'city', pickRows(S.data.c, S.text, el.cityQ.value, S.more.city, false), chooseCity, renderCities, keep);
   }
-  el.cityQ.addEventListener('input', renderCities);
+  el.cityQ.addEventListener('input', () => renderCities());
 
   function chooseCity(row) {
     S.city = row.item; S.town = null; S.more.town = false; el.townQ.value = '';
@@ -363,12 +385,13 @@
     el.townCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  function renderTowns() {
+  function renderTowns(keep) {
     const rest = S.text.slice(S.cityEnd);
-    const text = rest.length ? rest : S.text;
-    renderRows(el.townList, 'town', pickRows(S.city[2], text, el.townQ.value, S.more.town), (row) => { S.town = row.item; showResult(); }, renderTowns);
+    const useRest = rest.length > 0; // 市区町村の直後の文字列があれば、町域は先頭から始まるものとして近さを測る
+    const text = useRest ? rest : S.text;
+    renderRows(el.townList, 'town', pickRows(S.city[2], text, el.townQ.value, S.more.town, useRest), (row) => { S.town = row.item; showResult(); }, renderTowns, keep);
   }
-  el.townQ.addEventListener('input', renderTowns);
+  el.townQ.addEventListener('input', () => renderTowns());
   el.skipTown.addEventListener('click', () => { S.town = null; showResult(); });
 
   // ---------- 結果 ----------
@@ -559,6 +582,18 @@
   el.histClear.addEventListener('click', () => {
     if (hist.length && confirm('履歴をすべて消します。よろしいですか？')) { hist = []; saveHist(); renderHist(); }
   });
+
+  // ---------- ライト／ダーク ----------
+  function applyTheme(t, save) {
+    document.documentElement.setAttribute('data-theme', t);
+    el.themeIcon.textContent = t === 'dark' ? '☀️' : '🌙';
+    el.themeBtn.setAttribute('aria-label', t === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え');
+    if (save) { try { localStorage.setItem('tapdefurigana.theme', t); } catch (e) { /* 保存できなくても切り替えは有効 */ } }
+  }
+  el.themeBtn.addEventListener('click', () => {
+    applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark', true);
+  });
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light', false);
 
   // ---------- メモリを整理 ----------
   el.cleanBtn.addEventListener('click', async () => {

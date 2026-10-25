@@ -259,6 +259,10 @@
                         const btn = document.createElement('div');
                         btn.className = 'kanji-btn';
                         
+                        btn.innerText = word.text;
+                        btn.style.fontSize = "10px";
+                        btn.style.color = "blue";
+                        
                         btn.style.left = (word.bbox.x0 * scaleX + offsetX) + 'px';
                         btn.style.top = (word.bbox.y0 * scaleY + offsetY) + 'px';
                         btn.style.width = ((word.bbox.x1 - word.bbox.x0) * scaleX) + 'px';

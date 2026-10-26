@@ -245,7 +245,7 @@
     maxSide: $('maxSide'), psm: $('psm'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
   const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {}, histId: null };
-  const metrics = { ocrInit: null, image: null, ocr: null, photos: 0 };
+  const metrics = { ocrInit: null, image: null, ocr: null, photos: 0, lastError: '' };
   const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
   // ---------- 表示まわり ----------
@@ -270,6 +270,7 @@
       '画像の読込・縮小: ' + f(metrics.image),
       'OCR処理        : ' + f(metrics.ocr),
       '撮影した枚数   : ' + metrics.photos,
+      '直近のエラー   : ' + (metrics.lastError || 'なし'),
       'JSメモリ使用   : ' + heap,
     ].join('\n');
   }
@@ -499,7 +500,8 @@
       }
     } catch (e) {
       console.error(e);
-      setStatus('処理に失敗しました（メモリ不足の可能性があります）。自動で整理しています。もう一度試してください。', true);
+      metrics.lastError = (e && (e.message || e.name)) ? String(e.message || e.name) : String(e);
+      setStatus('処理に失敗しました: ' + metrics.lastError + '（メモリ不足の可能性もあります）。自動で整理しています。少し待って、もう一度試してください。', true);
       OCR.release().catch(() => {});
     } finally {
       if (work) { work.width = work.height = 0; } // 作業用の画像を手放す

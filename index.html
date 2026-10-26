@@ -104,7 +104,6 @@
   .rubies { font-size: 26px; font-weight: 700; line-height: 2.2; }
   .rubies ruby { margin-right: .5em; }
   .rubies rt { font-size: 12px; font-weight: 400; color: var(--indigo); }
-  .reading { font-size: 22px; font-weight: 700; margin: 6px 0 12px; letter-spacing: .04em; word-break: break-all; }
 
   details.debug { margin-top: 18px; }
   details.debug summary { cursor: pointer; font-size: 14px; color: var(--muted); }
@@ -143,15 +142,15 @@
 </header>
 
 <main>
-  <section class="card" id="loadCard">
-    <button id="loadBtn" class="btn primary" type="button">データ取得</button>
-    <div class="bar"><div id="barFill"></div></div>
-    <p class="msg" id="loadMsg">最初に「データ取得」を押してください。</p>
+  <section class="card" id="loadCard" hidden>
+    <p class="msg" id="loadMsg"></p>
+    <div class="bar" hidden><div id="barFill"></div></div>
+    <button id="loadBtn" class="btn primary" type="button" style="margin-top:10px">もう一度準備する</button>
   </section>
 
   <section class="card" id="prefCard">
     <label class="lbl" for="pref">都道府県（分かっていれば先に選ぶ）</label>
-    <select id="pref" disabled><option value="">データ取得のあとに選べます</option></select>
+    <select id="pref" disabled><option value="">準備中…</option></select>
     <div class="row">
       <button id="camBtn" class="btn" type="button" disabled>撮影する</button>
       <button id="galBtn" class="btn" type="button" disabled>ギャラリーから選ぶ</button>
@@ -164,6 +163,7 @@
   <section class="card" id="photoCard" hidden>
     <canvas id="thumb" width="1" height="1"></canvas>
     <p class="msg" id="photoMsg"></p>
+    <button id="retryBtn" class="btn small" type="button" style="margin-top:8px" hidden>準備し直して、もう一度</button>
     <p class="msg" id="ocrText" style="margin-top:6px"></p>
   </section>
 
@@ -184,7 +184,6 @@
   <section class="card result" id="result" hidden>
     <h2>読み</h2>
     <div class="rubies" id="rubies"></div>
-    <div class="reading" id="reading"></div>
     <p class="note" style="margin:0 0 10px">この読みは、履歴に自動で残ります。</p>
     <button id="nextBtn" class="btn primary" type="button">次の住所へ</button>
   </section>
@@ -205,6 +204,12 @@
           <option value="6" selected>単一ブロック（1〜2行向け・推奨）</option>
           <option value="7">1行のみ</option>
           <option value="3">自動レイアウト</option>
+        </select>
+      </label>
+      <label>OCRエンジンの保持（メモリ対策）
+        <select id="keepMode">
+          <option value="0" selected>撮影のたびに手放す（メモリ最小・おすすめ）</option>
+          <option value="180000">3分間は保持する（連続撮影が速い）</option>
         </select>
       </label>
       <label class="check"><input type="checkbox" id="normalize" checked>影や明るさのムラを補正して認識</label>
@@ -238,11 +243,11 @@
     photoCard: $('photoCard'), thumb: $('thumb'), ocrText: $('ocrText'),
     cityCard: $('cityCard'), cityQ: $('cityQ'), cityList: $('cityList'),
     townCard: $('townCard'), townHead: $('townHead'), townQ: $('townQ'), townList: $('townList'), skipTown: $('skipTown'),
-    result: $('result'), rubies: $('rubies'), reading: $('reading'), nextBtn: $('nextBtn'),
-    loadCard: $('loadCard'), prefCard: $('prefCard'), photoMsg: $('photoMsg'), readyMark: $('readyMark'),
+    result: $('result'), rubies: $('rubies'), nextBtn: $('nextBtn'),
+    loadCard: $('loadCard'), retryBtn: $('retryBtn'), prefCard: $('prefCard'), photoMsg: $('photoMsg'), readyMark: $('readyMark'),
     themeBtn: $('themeBtn'), iconSun: $('iconSun'), iconMoon: $('iconMoon'), histBtn: $('histBtn'), histCount: $('histCount'), scrim: $('scrim'), drawer: $('drawer'),
     drawerClose: $('drawerClose'), histList: $('histList'), histClear: $('histClear'),
-    maxSide: $('maxSide'), psm: $('psm'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
+    maxSide: $('maxSide'), psm: $('psm'), keepMode: $('keepMode'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
   const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {}, histId: null };
   const metrics = { ocrInit: null, image: null, ocr: null, photos: 0, lastError: '' };
@@ -271,47 +276,87 @@
       'OCR処理        : ' + f(metrics.ocr),
       '撮影した枚数   : ' + metrics.photos,
       '直近のエラー   : ' + (metrics.lastError || 'なし'),
+      'OCRエンジン    : ' + (OCR.isLoaded() ? '読み込み中（メモリを使用）' : '手放し済み'),
       'JSメモリ使用   : ' + heap,
     ].join('\n');
   }
 
-  // ---------- データ取得（OCRエンジン + 都道府県の一覧） ----------
+  // ---------- 準備（開くと自動で行う） ----------
+  // 住所データの一覧を読み込んで使えるようにする。OCRエンジンは重いので、写真を撮るたびに起動し、終わったら手放す
   const OCR_STEPS = ['loading tesseract core', 'initializing tesseract', 'loading language traineddata', 'initializing api'];
   const OCR_LABEL = ['OCRエンジンを読み込み中', 'OCRエンジンを初期化中', '日本語データを読み込み中', 'OCRを準備中'];
+  const IDLE_PRELOAD_MS = 120000; // 先読みしたエンジンが使われないとき、手放すまでの時間
+  let idleTimer = null;
 
-  el.loadBtn.addEventListener('click', async () => {
-    el.loadBtn.disabled = true;
+  async function ensureEngine(quiet) {
+    if (OCR.isLoaded()) return;
+    const t0 = performance.now();
+    if (!quiet) { setStatus('OCRエンジンを準備中…'); await nextPaint(); }
+    await OCR.init((m) => {
+      const i = OCR_STEPS.indexOf(m.status);
+      if (i >= 0 && !quiet) setStatus(OCR_LABEL[i] + '… ' + Math.round(100 * (i + (m.progress || 0)) / OCR_STEPS.length) + '%');
+    });
+    metrics.ocrInit = performance.now() - t0;
+  }
+  function scheduleRelease(ms) {
+    clearTimeout(idleTimer);
+    if (ms > 0) idleTimer = setTimeout(() => { if (!S.busy) OCR.release().then(renderMetrics, () => {}); }, ms);
+  }
+  const keepMs = () => parseInt(el.keepMode.value, 10) || 0;
+
+  // ページが読み込み直されたか（ブラウザがメモリを空けるために閉じた場合など）を調べる
+  let reloaded = !!document.wasDiscarded;
+  try {
+    if (sessionStorage.getItem('tdf.alive')) reloaded = true;
+    sessionStorage.setItem('tdf.alive', '1');
+  } catch (e) { /* 調べられない環境では知らせない */ }
+
+  async function prepare() {
+    el.loadCard.hidden = true;
     try {
-      const t0 = performance.now();
-      setProgress(0.02, 'OCRエンジンを準備中…');
-      await nextPaint();
-      await OCR.init((m) => {
-        const i = OCR_STEPS.indexOf(m.status);
-        if (i >= 0) setProgress(0.9 * (i + (m.progress || 0)) / OCR_STEPS.length, OCR_LABEL[i] + '…');
-      });
-      metrics.ocrInit = performance.now() - t0;
-      setProgress(0.95, '住所データを確認中…');
       S.prefs = await Address.loadIndex();
       el.pref.textContent = '';
       el.pref.append(new Option('（都道府県を選ぶ）', ''));
       for (const p of S.prefs) el.pref.append(new Option(p[1] + '（' + p[2] + '）', p[0]));
+      el.pref.value = S.prefCode; // 準備し直しても、選んでいた県を保つ
       el.pref.disabled = false;
       S.ready = true;
       setBusy(false);
-      setProgress(1, '準備ができました。都道府県を選ぶか、住所を撮影してください。');
-      el.loadBtn.textContent = 'データ取得済み';
-      el.loadCard.hidden = true; // 一日の最初に一度使うだけなので、取得後は畳んで隠す
       el.readyMark.hidden = false;
-      setStatus('準備ができました。都道府県を選ぶか、住所を撮影してください。');
+      setStatus(reloaded
+        ? 'ページが読み込み直されたため、自動で準備し直しました（ブラウザがメモリを空けるために閉じた可能性があります）。履歴は残っています。'
+        : '準備ができました。都道府県を選ぶか、住所を撮影してください。');
+      reloaded = false;
+      // 最初の1枚を速くするため、OCRエンジンを裏で先読みする（使われなければ手放す）
+      ensureEngine(true).then(() => { scheduleRelease(IDLE_PRELOAD_MS); renderMetrics(); }, () => {});
     } catch (e) {
       console.error(e);
-      setProgress(0);
-      el.loadMsg.textContent = 'データ取得に失敗しました: ' + (e && e.message ? e.message : e);
+      el.loadMsg.textContent = '準備に失敗しました: ' + (e && e.message ? e.message : e);
       el.loadMsg.classList.add('error');
       el.loadBtn.disabled = false;
-      el.loadBtn.textContent = 'データ取得をやり直す';
+      el.loadCard.hidden = false;
     }
     renderMetrics();
+  }
+  el.loadBtn.addEventListener('click', () => { el.loadBtn.disabled = true; prepare(); });
+
+  // 裏に回っている間はタイマーが止まるため、長く離れていた場合は、戻った時点でエンジンの状態をそろえる
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { hiddenAt = Date.now(); return; }
+    const away = hiddenAt ? Date.now() - hiddenAt : 0;
+    hiddenAt = 0;
+    if (!S.busy && OCR.isLoaded() && away > Math.max(keepMs(), IDLE_PRELOAD_MS)) {
+      clearTimeout(idleTimer);
+      OCR.release().then(renderMetrics, () => {}); // 次の撮影のとき、新しく起動し直す
+    }
+  });
+  el.retryBtn.addEventListener('click', async () => {
+    el.retryBtn.hidden = true;
+    setStatus('準備し直しています…');
+    try { await OCR.release(); } catch (e) { /* 無視 */ }
+    await prepare();
+    el.prefCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
   // ---------- 都道府県・候補リスト ----------
@@ -408,7 +453,6 @@
       r.append(rt);
       el.rubies.append(r);
     }
-    el.reading.textContent = parts.map((p) => p[1]).join(' ');
     addHistory(parts);
     el.result.hidden = false;
     el.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -424,8 +468,12 @@
   });
 
   // ---------- 撮影・画像の取り込み ----------
-  el.camBtn.addEventListener('click', () => el.camIn.click());
-  el.galBtn.addEventListener('click', () => el.galIn.click());
+  // カメラやギャラリーを開くと、このページは裏に回る。重いOCRエンジンを抱えたままだと、ブラウザに閉じられやすい
+  function releaseBeforePicker() {
+    if (keepMs() === 0) { clearTimeout(idleTimer); OCR.release().then(renderMetrics, () => {}); }
+  }
+  el.camBtn.addEventListener('click', () => { el.camIn.click(); releaseBeforePicker(); });
+  el.galBtn.addEventListener('click', () => { el.galIn.click(); releaseBeforePicker(); });
   el.camIn.addEventListener('change', () => handleFile(el.camIn.files[0]));
   el.galIn.addEventListener('change', () => handleFile(el.galIn.files[0]));
 
@@ -450,6 +498,8 @@
     el.thumb.width = el.thumb.height = 1; // 前の写真を先に手放す
     S.text = ''; S.city = null; S.town = null; S.more = {}; S.histId = null;
     el.townCard.hidden = true; el.result.hidden = true; el.cityQ.value = '';
+    clearTimeout(idleTimer);
+    el.retryBtn.hidden = true;
     let work = null;
     try {
       setStatus('画像を読み込み中…');
@@ -471,6 +521,7 @@
       el.photoCard.scrollIntoView({ behavior: 'smooth', block: 'start' }); // 撮影した写真の位置へ
       metrics.image = performance.now() - tImg;
 
+      await ensureEngine(false); // 手放してあれば、ここで起動する
       setStatus('文字を解析中… 0%');
       await nextPaint();
       const tOcr = performance.now();
@@ -479,6 +530,8 @@
       });
       metrics.ocr = performance.now() - tOcr;
       metrics.photos++;
+      // 読み取りが終わったら、エンジンを手放す（設定で、しばらく保持することもできる）
+      if (keepMs() === 0) OCR.release().then(renderMetrics, () => {}); else scheduleRelease(keepMs());
 
       const raw = lines.map((l) => l.text).join('');
       S.text = Address.normalizeText(raw);
@@ -503,6 +556,7 @@
       metrics.lastError = (e && (e.message || e.name)) ? String(e.message || e.name) : String(e);
       setStatus('処理に失敗しました: ' + metrics.lastError + '（メモリ不足の可能性もあります）。自動で整理しています。少し待って、もう一度試してください。', true);
       OCR.release().catch(() => {});
+      el.retryBtn.hidden = false; // 失敗した場所に、やり直しの入口を出す
     } finally {
       if (work) { work.width = work.height = 0; } // 作業用の画像を手放す
       el.camIn.value = ''; el.galIn.value = '';
@@ -588,8 +642,9 @@
   // ---------- ライト／ダーク ----------
   function applyTheme(t, save) {
     document.documentElement.setAttribute('data-theme', t);
-    el.iconSun.hidden = t === 'dark'; // 今のモードの印を出す（ライト＝太陽、ダーク＝月）
-    el.iconMoon.hidden = t !== 'dark';
+    // 今のモードの印を出す（ライト＝太陽、ダーク＝月）。SVGにはhiddenプロパティがないので属性で切り替える
+    el.iconSun.toggleAttribute('hidden', t === 'dark');
+    el.iconMoon.toggleAttribute('hidden', t !== 'dark');
     el.themeBtn.setAttribute('aria-label', t === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え');
     if (save) { try { localStorage.setItem('tapdefurigana.theme', t); } catch (e) { /* 保存できなくても切り替えは有効 */ } }
   }
@@ -609,14 +664,17 @@
     renderMetrics();
   });
 
-  if (typeof Tesseract === 'undefined') {
-    el.loadBtn.disabled = true;
-    el.loadMsg.textContent = 'lib/ フォルダにライブラリがありません。README.md の手順を確認してください。';
-    el.loadMsg.classList.add('error');
-  }
   loadHist();
   renderHist();
   renderMetrics();
+  if (typeof Tesseract === 'undefined') {
+    el.loadCard.hidden = false;
+    el.loadBtn.disabled = true;
+    el.loadMsg.textContent = 'lib/ フォルダにライブラリがありません。README.md の手順を確認してください。';
+    el.loadMsg.classList.add('error');
+  } else {
+    prepare();
+  }
 })();
 </script>
 </body>

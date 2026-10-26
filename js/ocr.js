@@ -1,5 +1,6 @@
 /* OCRの窓口
- *   await OCR.init(onLog)                       … エンジンの準備（1回だけ）
+ *   await OCR.init(onLog)                       … エンジンの起動（起動済みなら何もしない）
+ *   await OCR.release()                         … エンジンを止めてメモリを手放す
  *   await OCR.recognize(canvas, {psm}, onLog)   … 文字と座標のリストを返す
  *
  * 返り値: [{ text, bbox:{x0,y0,x1,y1}, chars:[{ ch, start, end, bbox, isKanji }] }]
@@ -14,38 +15,37 @@ const OCR = (() => {
   const BASE = new URL('lib/tesseract', document.baseURI).href;
   const KANJI = /[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u3007]/;
 
-  const RECYCLE_EVERY = 1; // 1枚ごとにOCRエンジンを作り直し、メモリの増加を持ち越さない（候補を選んでいる間に裏で済む）
-
   let worker = null;
+  let initP = null; // 起動中の処理（二重に起動しないよう共有する）
   let logCb = null;
-  let runs = 0;
-  let ready = Promise.resolve();
 
-  // OCRエンジンを止めて作り直す（wasmのメモリを手放す）
-  async function recycle() {
-    if (worker) {
-      try { await worker.terminate(); } catch (e) { /* 無視 */ }
-      worker = null;
+  // 起動は1回だけ。すでに起動中なら、その完了を待つ
+  function init(onLog) {
+    if (worker) return Promise.resolve();
+    if (onLog) logCb = onLog;
+    if (!initP) {
+      initP = Tesseract.createWorker('jpn', 1, {
+        workerPath: BASE + '/worker.min.js',
+        corePath: BASE,
+        langPath: BASE + '/lang',
+        cacheMethod: 'none', // テスト中は、ブラウザに古いモデルが残って使われるのを防ぐ
+        logger: (m) => { if (logCb) logCb(m); },
+      }).then((w) => { worker = w; }).finally(() => { initP = null; });
     }
-    runs = 0;
-    await init();
+    return initP;
   }
-  const release = async () => { await ready; await recycle(); };
 
-  async function init(onLog) {
-    if (worker) return;
-    logCb = onLog || null;
-    worker = await Tesseract.createWorker('jpn', 1, {
-      workerPath: BASE + '/worker.min.js',
-      corePath: BASE,
-      langPath: BASE + '/lang',
-      cacheMethod: 'none', // テスト中は、ブラウザに古いモデルが残って使われるのを防ぐ
-      logger: (m) => { if (logCb) logCb(m); },
-    });
+  // OCRエンジンを止めて、メモリを手放す。次に使うときは init() でまた起動する
+  async function release() {
+    if (initP) { try { await initP; } catch (e) { /* 起動に失敗したなら、手放すものはない */ } }
+    const w = worker;
+    worker = null;
+    if (w) { try { await w.terminate(); } catch (e) { /* 無視 */ } }
   }
+
+  const isLoaded = () => !!worker;
 
   async function recognize(image, opts, onLog) {
-    await ready; // 作り直しの最中なら待つ
     if (!worker) throw new Error('OCRが準備されていません');
     logCb = onLog || null;
     await worker.setParameters({
@@ -55,7 +55,6 @@ const OCR = (() => {
     const target = opts && opts.normalize ? normalize(image) : image;
     const { data } = await worker.recognize(target);
     logCb = null;
-    if (++runs >= RECYCLE_EVERY) ready = recycle().catch((e) => console.warn('OCRの作り直しに失敗', e));
     return toLines(data);
   }
 
@@ -122,5 +121,5 @@ const OCR = (() => {
     return lines;
   }
 
-  return { init, recognize, release };
+  return { init, recognize, release, isLoaded };
 })();

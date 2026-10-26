@@ -14,7 +14,7 @@ const OCR = (() => {
   const BASE = new URL('lib/tesseract', document.baseURI).href;
   const KANJI = /[\u3400-\u4DBF\u4E00-\u9FFF\u3005\u3006\u3007]/;
 
-  const RECYCLE_EVERY = 3; // 数枚ごとにOCRエンジンを作り直し、メモリを解放する
+  const RECYCLE_EVERY = 1; // 1枚ごとにOCRエンジンを作り直し、メモリの増加を持ち越さない（候補を選んでいる間に裏で済む）
 
   let worker = null;
   let logCb = null;

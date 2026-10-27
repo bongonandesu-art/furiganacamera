@@ -250,7 +250,7 @@
     maxSide: $('maxSide'), psm: $('psm'), keepMode: $('keepMode'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
   const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {}, histId: null };
-  const metrics = { ocrInit: null, image: null, ocr: null, photos: 0, lastError: '' };
+  const metrics = { ocrInit: null, image: null, ocr: null, photos: 0, lastError: '', cached: '未確認' };
   const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
   // ---------- 表示まわり ----------
@@ -276,6 +276,7 @@
       'OCR処理        : ' + f(metrics.ocr),
       '撮影した枚数   : ' + metrics.photos,
       '直近のエラー   : ' + (metrics.lastError || 'なし'),
+      '大きなファイル : ' + metrics.cached,
       'OCRエンジン    : ' + (OCR.isLoaded() ? '読み込み中（メモリを使用）' : '手放し済み'),
       'JSメモリ使用   : ' + heap,
     ].join('\n');
@@ -297,6 +298,16 @@
       if (i >= 0 && !quiet) setStatus(OCR_LABEL[i] + '… ' + Math.round(100 * (i + (m.progress || 0)) / OCR_STEPS.length) + '%');
     });
     metrics.ocrInit = performance.now() - t0;
+    checkCache().then(renderMetrics);
+  }
+  // OCRの大きなファイルが、端末（ブラウザ）に保存済みかを調べる。保存済みなら、起動のたびの通信は発生しない
+  async function checkCache() {
+    const has = (u) => fetch(u, { cache: 'only-if-cached', mode: 'same-origin' }).then((r) => r.ok, () => false);
+    try {
+      const model = await has('lib/tesseract/lang/jpn.traineddata.gz');
+      const core = (await has('lib/tesseract/tesseract-core-simd-lstm.wasm.js')) || (await has('lib/tesseract/tesseract-core-lstm.wasm.js'));
+      metrics.cached = model && core ? '端末に保存済み（再ダウンロードなし）' : '保存されていない（通信が発生しています）';
+    } catch (e) { metrics.cached = '確認できません'; }
   }
   function scheduleRelease(ms) {
     clearTimeout(idleTimer);
@@ -664,6 +675,28 @@
     renderMetrics();
   });
 
+  // ---------- ユーザー設定の保持（ブラウザ内に保存） ----------
+  const SKEY = 'tapdefurigana.settings.v1';
+  const SELECTS = ['maxSide', 'psm', 'keepMode'];
+  function loadSettings() {
+    try {
+      const j = JSON.parse(localStorage.getItem(SKEY) || '{}');
+      for (const id of SELECTS) {
+        if (j[id] != null && [...el[id].options].some((o) => o.value === String(j[id]))) el[id].value = String(j[id]);
+      }
+      if (typeof j.normalize === 'boolean') el.normalize.checked = j.normalize;
+    } catch (e) { /* 読めなければ初期設定のまま */ }
+  }
+  function saveSettings() {
+    try {
+      const o = { normalize: el.normalize.checked };
+      for (const id of SELECTS) o[id] = el[id].value;
+      localStorage.setItem(SKEY, JSON.stringify(o));
+    } catch (e) { /* 保存できなくても動作は続ける */ }
+  }
+  for (const id of [...SELECTS, 'normalize']) el[id].addEventListener('change', saveSettings);
+
+  loadSettings();
   loadHist();
   renderHist();
   renderMetrics();

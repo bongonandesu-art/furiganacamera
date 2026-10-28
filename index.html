@@ -99,6 +99,10 @@
   .opt.best { border: 2px solid var(--amber); background: var(--best-bg); }
   .opt:active { background: var(--mist); }
   .note { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+  .cd { margin-top: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--amber); background: var(--best-bg); font-size: 14px; }
+  .cd-bar { height: 6px; border-radius: 3px; background: var(--line); margin-top: 6px; overflow: hidden; }
+  .cd-bar i { display: block; height: 100%; width: 100%; background: var(--amber); transition: width 1s linear; }
+  @media (prefers-reduced-motion: reduce) { .cd-bar i { transition: none; } }
 
   .result { border: 2px solid var(--indigo); }
   .rubies { font-size: 26px; font-weight: 700; line-height: 2.2; }
@@ -170,14 +174,16 @@
   <section class="card" id="cityCard" hidden>
     <h2>① 市区町村を選ぶ</h2>
     <input id="cityQ" type="search" placeholder="絞り込み（漢字またはひらがな）">
+    <div class="cd" id="cityCd" hidden><div class="cd-text" id="cityCdText"></div><div class="cd-bar"><i id="cityCdBar"></i></div></div>
     <div class="list" id="cityList"></div>
   </section>
 
   <section class="card" id="townCard" hidden>
     <h2 id="townHead">② 町域を選ぶ</h2>
     <input id="townQ" type="search" placeholder="絞り込み（漢字またはひらがな）">
+    <div class="cd" id="townCd" hidden><div class="cd-text" id="townCdText"></div><div class="cd-bar"><i id="townCdBar"></i></div></div>
     <div class="list" id="townList"></div>
-    <p class="note">黄色の枠は、写真の文字にいちばん近い候補です。</p>
+    <p class="note" id="townNote"></p>
     <button id="skipTown" class="btn small" type="button" style="margin-top:10px">町域は選ばずに確定する</button>
   </section>
 
@@ -212,6 +218,18 @@
           <option value="180000">3分間は保持する（連続撮影が速い）</option>
         </select>
       </label>
+      <label>決定のしかた
+        <select id="cdMode">
+          <option value="A" selected>A：タップ式（先頭の候補を、自分でタップして決める）</option>
+          <option value="B">B：時限式（黄色の候補を、カウントダウンのあと自動で確定）</option>
+        </select>
+      </label>
+      <label>時限式の秒数
+        <select id="cdSeconds">
+          <option value="3">3秒</option><option value="4">4秒</option><option value="5" selected>5秒</option>
+          <option value="6">6秒</option><option value="7">7秒</option>
+        </select>
+      </label>
       <label class="check"><input type="checkbox" id="normalize" checked>影や明るさのムラを補正して認識</label>
     </div>
     <button id="cleanBtn" class="btn small" type="button" disabled>メモリを整理する</button>
@@ -243,13 +261,16 @@
     photoCard: $('photoCard'), thumb: $('thumb'), ocrText: $('ocrText'),
     cityCard: $('cityCard'), cityQ: $('cityQ'), cityList: $('cityList'),
     townCard: $('townCard'), townHead: $('townHead'), townQ: $('townQ'), townList: $('townList'), skipTown: $('skipTown'),
+    cityCd: $('cityCd'), cityCdText: $('cityCdText'), cityCdBar: $('cityCdBar'),
+    townCd: $('townCd'), townCdText: $('townCdText'), townCdBar: $('townCdBar'), townNote: $('townNote'),
+    cdMode: $('cdMode'), cdSeconds: $('cdSeconds'),
     result: $('result'), rubies: $('rubies'), nextBtn: $('nextBtn'),
     loadCard: $('loadCard'), retryBtn: $('retryBtn'), prefCard: $('prefCard'), photoMsg: $('photoMsg'), readyMark: $('readyMark'),
     themeBtn: $('themeBtn'), iconSun: $('iconSun'), iconMoon: $('iconMoon'), histBtn: $('histBtn'), histCount: $('histCount'), scrim: $('scrim'), drawer: $('drawer'),
     drawerClose: $('drawerClose'), histList: $('histList'), histClear: $('histClear'),
     maxSide: $('maxSide'), psm: $('psm'), keepMode: $('keepMode'), normalize: $('normalize'), cleanBtn: $('cleanBtn'), metrics: $('metrics'),
   };
-  const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {}, histId: null };
+  const S = { ready: false, busy: false, prefs: [], prefCode: '', data: null, text: '', city: null, cityEnd: 0, town: null, more: {}, histId: null, cdFirstPass: false, topCity: null, topTown: null };
   const metrics = { ocrInit: null, image: null, ocr: null, photos: 0, lastError: '', cached: '未確認' };
   const nextPaint = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 
@@ -354,7 +375,7 @@
   // 裏に回っている間はタイマーが止まるため、長く離れていた場合は、戻った時点でエンジンの状態をそろえる
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { hiddenAt = Date.now(); return; }
+    if (document.hidden) { hiddenAt = Date.now(); cancelAllCountdowns(); return; } // 離席中に勝手に確定しない
     const away = hiddenAt ? Date.now() - hiddenAt : 0;
     hiddenAt = 0;
     if (!S.busy && OCR.isLoaded() && away > Math.max(keepMs(), IDLE_PRELOAD_MS)) {
@@ -370,8 +391,59 @@
     el.prefCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
+  // ---------- 決定のしかた：A タップ式 / B 時限式 ----------
+  // B：写真から決まった先頭の候補（黄色）を、カウントダウンのあと自動で確定する。市区町村と町域の2か所に、同じ秒数で出る
+  const isTimed = () => el.cdMode.value === 'B';
+  const cdSeconds = () => Math.min(7, Math.max(3, parseInt(el.cdSeconds.value, 10) || 5));
+  const CD = { city: null, town: null };
+
+  function cancelCountdown(kind) {
+    if (CD[kind]) { clearInterval(CD[kind]); CD[kind] = null; }
+    el[kind + 'Cd'].hidden = true;
+  }
+  function cancelAllCountdowns() { cancelCountdown('city'); cancelCountdown('town'); }
+
+  function startCountdown(kind, label, onDone) {
+    cancelCountdown(kind);
+    const text = el[kind + 'CdText'];
+    const bar = el[kind + 'CdBar'];
+    const total = cdSeconds();
+    let left = total;
+    const draw = () => {
+      text.textContent = '「' + label + '」で ' + left + ' 秒後に確定します（候補をさわると止まります）';
+      bar.style.width = Math.round(100 * (left - 1) / total) + '%'; // 1秒かけて、次の目盛りまで縮む
+    };
+    bar.style.transition = 'none';
+    bar.style.width = '100%';
+    void bar.offsetWidth; // 初期位置を確定させてから、動かし始める
+    bar.style.transition = '';
+    el[kind + 'Cd'].hidden = false;
+    draw();
+    CD[kind] = setInterval(() => {
+      left--;
+      if (left <= 0) { cancelCountdown(kind); onDone(); } else draw();
+    }, 1000);
+  }
+  // 候補一覧にさわった（タップ・スクロール・入力）ら、そのカードのカウントダウンだけを止める。復活はしない
+  for (const [kind, nodes] of [['city', [el.cityList, el.cityQ]], ['town', [el.townList, el.townQ]]]) {
+    for (const n of nodes) for (const ev of ['pointerdown', 'wheel', 'keydown']) n.addEventListener(ev, () => cancelCountdown(kind), { passive: true });
+  }
+  function syncCdUi() { el.cdSeconds.disabled = !isTimed(); }
+  for (const id of ['cdMode', 'cdSeconds']) {
+    el[id].addEventListener('change', () => {
+      syncCdUi(); cancelAllCountdowns();
+      if (S.data) renderCities();
+      if (S.city) renderTowns();
+    });
+  }
+  const startCityCountdown = () => {
+    const top = S.topCity;
+    if (isTimed() && S.cdFirstPass && top) startCountdown('city', top.item[0], () => chooseCity(top));
+  };
+
   // ---------- 都道府県・候補リスト ----------
   async function setPref(code) {
+    cancelAllCountdowns();
     S.prefCode = code; S.city = null; S.town = null; S.more = {};
     el.cityQ.value = ''; el.townQ.value = '';
     el.townCard.hidden = true; el.result.hidden = true;
@@ -384,7 +456,10 @@
   }
   el.pref.addEventListener('change', async () => {
     await setPref(el.pref.value);
-    if (S.text && S.data) el.cityCard.scrollIntoView({ behavior: 'smooth', block: 'start' }); // 写真の結果があれば候補へ
+    if (S.text && S.data) {
+      el.cityCard.scrollIntoView({ behavior: 'smooth', block: 'start' }); // 写真の結果があれば候補へ
+      startCityCountdown(); // 写真の読み取り結果に対する最初の判定なら、時限式のカウントダウンを出す
+    }
   });
 
   // 候補の並べ方: 絞り込み入力があればそれ、写真があれば近い順（上位のみ）、なければ全件
@@ -411,7 +486,7 @@
     for (const row of res.rows) {
       const b = document.createElement('button');
       b.type = 'button';
-      b.className = 'opt' + (row.best ? ' best' : '');
+      b.className = 'opt' + (row.best && isTimed() ? ' best' : '');
       const rd = document.createElement('span'); rd.className = 'rd'; rd.textContent = row.item[1] || '（読みなし）';
       const kj = document.createElement('span'); kj.className = 'kj'; kj.textContent = row.item[0];
       b.append(rd, kj);
@@ -430,29 +505,41 @@
   }
 
   function renderCities(keep) {
-    renderRows(el.cityList, 'city', pickRows(S.data.c, S.text, el.cityQ.value, S.more.city), chooseCity, renderCities, keep);
+    const res = pickRows(S.data.c, S.text, el.cityQ.value, S.more.city);
+    S.topCity = (!el.cityQ.value.trim() && S.text && res.rows[0] && res.rows[0].best) ? res.rows[0] : null;
+    renderRows(el.cityList, 'city', res, chooseCity, renderCities, keep);
   }
   el.cityQ.addEventListener('input', () => renderCities());
 
   function chooseCity(row) {
+    cancelAllCountdowns();
     S.city = row.item; S.town = null; S.more.town = false; el.townQ.value = '';
     S.cityEnd = row.end != null ? row.end : (S.text ? Address.rank([row.item], S.text)[0].end : 0);
     el.townHead.textContent = '② 町域を選ぶ（' + S.city[0] + '）';
     el.townCard.hidden = false; el.result.hidden = true;
     renderTowns();
     el.townCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // カウントダウンは、写真1枚につき1巡目だけ。あとで市区町村を選び直したときは出さない
+    const first = S.cdFirstPass;
+    S.cdFirstPass = false;
+    const top = S.topTown;
+    if (first && isTimed() && top) startCountdown('town', top.item[0], () => { S.town = top.item; showResult(); });
   }
 
   function renderTowns(keep) {
     const rest = S.text.slice(S.cityEnd);
     const text = rest.length ? rest : S.text;
-    renderRows(el.townList, 'town', pickRows(S.city[2], text, el.townQ.value, S.more.town), (row) => { S.town = row.item; showResult(); }, renderTowns, keep);
+    const res = pickRows(S.city[2], text, el.townQ.value, S.more.town);
+    S.topTown = (!el.townQ.value.trim() && S.text && res.rows[0] && res.rows[0].best) ? res.rows[0] : null;
+    el.townNote.textContent = isTimed() ? '黄色の枠が、写真の文字にいちばん近い候補です。' : '先頭が、写真の文字にいちばん近い候補です。';
+    renderRows(el.townList, 'town', res, (row) => { S.town = row.item; showResult(); }, renderTowns, keep);
   }
   el.townQ.addEventListener('input', () => renderTowns());
   el.skipTown.addEventListener('click', () => { S.town = null; showResult(); });
 
   // ---------- 結果 ----------
   function showResult() {
+    cancelAllCountdowns();
     const pref = S.prefs.find((p) => p[0] === S.prefCode);
     const parts = [[pref[1], pref[2]], [S.city[0], S.city[1]]];
     if (S.town) parts.push([S.town[0], S.town[1]]);
@@ -469,6 +556,7 @@
     el.result.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   el.nextBtn.addEventListener('click', () => {
+    cancelAllCountdowns(); S.cdFirstPass = false;
     S.text = ''; S.city = null; S.town = null; S.more = {}; S.histId = null;
     el.thumb.width = el.thumb.height = 1; // 写真を手放す
     el.photoCard.hidden = true; el.townCard.hidden = true; el.result.hidden = true;
@@ -507,6 +595,7 @@
     if (!file || S.busy) return;
     setBusy(true);
     el.thumb.width = el.thumb.height = 1; // 前の写真を先に手放す
+    cancelAllCountdowns(); S.cdFirstPass = false;
     S.text = ''; S.city = null; S.town = null; S.more = {}; S.histId = null;
     el.townCard.hidden = true; el.result.hidden = true; el.cityQ.value = '';
     clearTimeout(idleTimer);
@@ -548,6 +637,7 @@
       S.text = Address.normalizeText(raw);
       el.ocrText.textContent = S.text ? '読み取った文字: ' + raw : '文字を読み取れませんでした。住所だけが大きく写るように撮り直してください。';
       if (!S.text) { setStatus(''); return; }
+      S.cdFirstPass = true; // この写真の読み取り結果に対する、1巡目の判定
 
       if (!S.prefCode) {
         const code = Address.detectPref(S.prefs, S.text);
@@ -557,10 +647,13 @@
         setStatus('都道府県を読み取れませんでした。上の欄で都道府県を選んでください。', true);
         el.prefCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } else {
-        setStatus('候補を出しました。黄色の枠が、写真の文字にいちばん近い候補です。');
+        setStatus(isTimed()
+          ? '候補を出しました。黄色の枠の候補を、カウントダウンのあと自動で確定します。'
+          : '候補を出しました。先頭が、写真の文字にいちばん近い候補です。');
         el.cityCard.hidden = false;
         renderCities();
         el.cityCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        startCityCountdown();
       }
     } catch (e) {
       console.error(e);
@@ -677,7 +770,7 @@
 
   // ---------- ユーザー設定の保持（ブラウザ内に保存） ----------
   const SKEY = 'tapdefurigana.settings.v1';
-  const SELECTS = ['maxSide', 'psm', 'keepMode'];
+  const SELECTS = ['maxSide', 'psm', 'keepMode', 'cdMode', 'cdSeconds'];
   function loadSettings() {
     try {
       const j = JSON.parse(localStorage.getItem(SKEY) || '{}');
@@ -697,6 +790,7 @@
   for (const id of [...SELECTS, 'normalize']) el[id].addEventListener('change', saveSettings);
 
   loadSettings();
+  syncCdUi();
   loadHist();
   renderHist();
   renderMetrics();

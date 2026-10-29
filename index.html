@@ -343,6 +343,16 @@
     sessionStorage.setItem('tdf.alive', '1');
   } catch (e) { /* 調べられない環境では知らせない */ }
 
+  // カメラやギャラリーに出たまま、写真が届かずにページが読み直された場合（ブラウザが裏のページを閉じたとき）を見分ける
+  //   撮影に出る直前に印を付け、写真が届いたら消す。印が残ったまま起動したら、写真が届かなかったことになる
+  let pickerLost = false;
+  try {
+    const p = parseInt(sessionStorage.getItem('tdf.pending'), 10);
+    if (p && Date.now() - p < 15 * 60 * 1000) pickerLost = true;
+    sessionStorage.removeItem('tdf.pending');
+  } catch (e) { /* 調べられない環境では知らせない */ }
+  function clearPending() { try { sessionStorage.removeItem('tdf.pending'); } catch (e) { /* 無視 */ } }
+
   async function prepare() {
     el.loadCard.hidden = true;
     try {
@@ -355,9 +365,20 @@
       S.ready = true;
       setBusy(false);
       el.readyMark.hidden = false;
-      setStatus(reloaded
-        ? 'ページが読み込み直されたため、自動で準備し直しました（ブラウザがメモリを空けるために閉じた可能性があります）。履歴は残っています。'
-        : '準備ができました。都道府県を選ぶか、住所を撮影してください。');
+      // ページが読み直された直後は、選んでいた都道府県を、本人の選択どおりに戻す
+      let restored = false;
+      if (pickerLost || reloaded) {
+        let saved = '';
+        try { saved = sessionStorage.getItem('tdf.pref') || ''; } catch (e) { /* 無視 */ }
+        if (saved && S.prefs.some((p) => p[0] === saved)) { el.pref.value = saved; await setPref(saved); restored = true; }
+      }
+      const back = restored ? '都道府県は、選んでいたものに戻しました。' : '';
+      setStatus(pickerLost
+        ? '撮影から戻る途中で、ブラウザがページを閉じたため、写真が届いていません（端末のメモリ不足によるものです）。もう一度撮影してください。' + back
+        : reloaded
+          ? 'ページが読み込み直されたため、自動で準備し直しました。履歴は残っています。' + back
+          : '準備ができました。都道府県を選ぶか、住所を撮影してください。');
+      pickerLost = false;
       reloaded = false;
       // 最初の1枚を速くするため、OCRエンジンを裏で先読みする（使われなければ手放す）
       ensureEngine(true).then(() => { scheduleRelease(IDLE_PRELOAD_MS); renderMetrics(); }, () => {});
@@ -378,6 +399,7 @@
     if (document.hidden) { hiddenAt = Date.now(); cancelAllCountdowns(); return; } // 離席中に勝手に確定しない
     const away = hiddenAt ? Date.now() - hiddenAt : 0;
     hiddenAt = 0;
+    setTimeout(clearPending, 4000); // 写真が届かずに戻った（撮影をやめた）場合は、印を消す
     if (!S.busy && OCR.isLoaded() && away > Math.max(keepMs(), IDLE_PRELOAD_MS)) {
       clearTimeout(idleTimer);
       OCR.release().then(renderMetrics, () => {}); // 次の撮影のとき、新しく起動し直す
@@ -445,6 +467,7 @@
   async function setPref(code) {
     cancelAllCountdowns();
     S.prefCode = code; S.city = null; S.town = null; S.more = {};
+    try { sessionStorage.setItem('tdf.pref', code); } catch (e) { /* 無視 */ }
     el.cityQ.value = ''; el.townQ.value = '';
     el.townCard.hidden = true; el.result.hidden = true;
     if (!code) { S.data = null; el.cityCard.hidden = true; return; }
@@ -569,12 +592,13 @@
   // ---------- 撮影・画像の取り込み ----------
   // カメラやギャラリーを開くと、このページは裏に回る。重いOCRエンジンを抱えたままだと、ブラウザに閉じられやすい
   function releaseBeforePicker() {
+    try { sessionStorage.setItem('tdf.pending', String(Date.now())); } catch (e) { /* 無視 */ }
     if (keepMs() === 0) { clearTimeout(idleTimer); OCR.release().then(renderMetrics, () => {}); }
   }
   el.camBtn.addEventListener('click', () => { el.camIn.click(); releaseBeforePicker(); });
   el.galBtn.addEventListener('click', () => { el.galIn.click(); releaseBeforePicker(); });
-  el.camIn.addEventListener('change', () => handleFile(el.camIn.files[0]));
-  el.galIn.addEventListener('change', () => handleFile(el.galIn.files[0]));
+  el.camIn.addEventListener('change', () => { clearPending(); handleFile(el.camIn.files[0]); });
+  el.galIn.addEventListener('change', () => { clearPending(); handleFile(el.galIn.files[0]); });
 
   // 読み込み時点で縮小して、元の大きな写真を丸ごとメモリに展開しないようにする
   async function loadBitmap(file, maxSide) {
@@ -658,7 +682,7 @@
     } catch (e) {
       console.error(e);
       metrics.lastError = (e && (e.message || e.name)) ? String(e.message || e.name) : String(e);
-      setStatus('処理に失敗しました: ' + metrics.lastError + '（メモリ不足の可能性もあります）。自動で整理しています。少し待って、もう一度試してください。', true);
+      setStatus('処理に失敗しました: ' + metrics.lastError + '。自動で整理しています。少し待って、もう一度撮影してください。', true);
       OCR.release().catch(() => {});
       el.retryBtn.hidden = false; // 失敗した場所に、やり直しの入口を出す
     } finally {
@@ -762,7 +786,11 @@
     setBusy(true);
     setStatus('メモリを整理中…');
     el.thumb.width = el.thumb.height = 1;
-    try { await OCR.release(); setStatus('メモリを整理しました。'); }
+    const had = OCR.isLoaded();
+    try {
+      await OCR.release();
+      setStatus(had ? 'OCRエンジンを手放しました。' : 'OCRエンジンは、すでに手放してあります。このボタンで減らせるメモリは、ほかにありません。');
+    }
     catch (e) { setStatus('整理に失敗しました。ページを再読み込みしてください。', true); }
     setBusy(false);
     renderMetrics();
